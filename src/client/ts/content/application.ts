@@ -1,4 +1,4 @@
-import { fullscreenExitSVG, fullscreenSVG } from 'harmony-svg';
+import { fullscreenExitSVG, fullscreenSVG, radioButtonCheckedSVG, radioButtonUncheckedSVG } from 'harmony-svg';
 import { addRemoveClass, createElement, createShadowRoot, defineHarmonySwitch, defineHarmonyTab, defineHarmonyTabGroup, defineHarmonyToggleButton, HTMLHarmonySwitchElement, HTMLHarmonyToggleButtonElement, I18n } from 'harmony-ui';
 import { Map2 } from 'harmony-utils';
 import marketHistoryCSS from '../../css/content.css';
@@ -8,6 +8,7 @@ import { addMethod } from './methods';
 import { readyPromise } from './ready';
 import { ContextType } from './record';
 import { Recorder } from './recorder';
+import { RecorderView } from './view/recorderview';
 import { ShaderEditor } from './view/shadereditor';
 
 const SUFFIX = '-webgpu-inspector';
@@ -16,6 +17,7 @@ export class Application {
 	#allowed: { webgl: boolean, webgl2: boolean, webgpu: boolean } = { webgl: true, webgl2: true, webgpu: true };
 	#htmlPanel?: ShadowRoot;
 	#htmlShaderEditor?: ShaderEditor;
+	#htmlRecorderView?: RecorderView;
 	#recorder = new Recorder();
 	#methods = new Map2<ContextType, string, Function>();
 	#webGLInitialized: { webgl: boolean, webgl2: boolean } = { webgl: false, webgl2: false };
@@ -48,6 +50,7 @@ export class Application {
 		defineHarmonyTab(SUFFIX);
 
 		this.#htmlShaderEditor = new ShaderEditor();
+		this.#htmlRecorderView = new RecorderView(this.#recorder);
 
 		// We wait for page readiness. document.body doesn't exist before that
 		await readyPromise;
@@ -120,11 +123,27 @@ export class Application {
 				createElement('div', {
 					class: 'toolbar',
 					childs: [
-						/*
-						createElement('span', {
-							innerHTML: radioButtonCheckedSVG,
+						createElement('div', {
+							childs: [
+								createElement('harmony-toggle-button' + SUFFIX, {
+									state: true,
+									'data-i18n': '#record',
+									childs: [
+										createElement('div', {
+											slot: 'off',
+											innerHTML: radioButtonUncheckedSVG,
+										}),
+										createElement('div', {
+											slot: 'on',
+											class: 'recording-on',
+											innerHTML: radioButtonCheckedSVG,
+										}),
+									],
+									$change: (event: Event) => this.#recorder.setRecording((event.target as HTMLHarmonyToggleButtonElement).state),
+								}),
+								createElement('span', {}),
+							],
 						}),
-						*/
 					],
 				}),
 				createElement('div', {
@@ -133,7 +152,7 @@ export class Application {
 						childs: [
 							createElement('harmony-tab' + SUFFIX, {
 								'data-i18n': '#records',
-								innerText: 'records',
+								child: this.#htmlRecorderView.htmlElement,
 							}),
 							createElement('harmony-tab' + SUFFIX, {
 								'data-i18n': '#shaders',
@@ -162,7 +181,9 @@ export class Application {
 		window.requestAnimationFrame = (callback: FrameRequestCallback): number => {
 
 			const c: (time: DOMHighResTimeStamp) => void = time => {
-				this.#recorder.requestAnimationFrame();
+
+				const start = performance.now();
+				this.#recorder.requestAnimationFrame(time);
 				callback(time);
 			}
 

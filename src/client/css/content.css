@@ -59,3 +59,7 @@
 .toolbar svg {
 	cursor: pointer;
 }
+
+.recording-on {
+	color: red;
+}

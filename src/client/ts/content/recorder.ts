@@ -51,6 +51,8 @@ export class Recorder {
 
 	addRecord(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, functionName: string, args: any[], result: any, start: DOMHighResTimeStamp, duration: DOMHighResTimeStamp) {
 		//console.debug(`Adding new ${contextType} record ${this.#currentId}`);
+
+		// We process the record whether we record or not: important things can occur, like shader compilation
 		this.#processRecord(contextType, context, functionName, args, result);
 
 		if (!this.#recording) {
@@ -58,7 +60,12 @@ export class Recorder {
 		}
 
 		const record = new Record(contextType, functionName, this.#currentId, start, duration, args);
+		this.#records.add(record);
 		++this.#currentId;
+	}
+
+	getRecords(): Set<Record> {
+		return this.#records;
 	}
 
 	#getShaderName(): string {
@@ -155,9 +162,15 @@ export class Recorder {
 		return program;
 	}
 
-	requestAnimationFrame(): void {
+	requestAnimationFrame(time: DOMHighResTimeStamp): void {
 		this.#lastRequestAnimationFrame = ++this.#currentId;
 		//console.info('request', this.#currentId);
+
+		if (!this.#recording) {
+			return;
+		}
+
+		Controller.dispatchEvent('requestanimationframe', { detail: time });
 	}
 
 	#recompileShader({ name, source }: RecompileShader) {

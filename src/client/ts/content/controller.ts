@@ -5,6 +5,8 @@ export type ControllerEvent =
 	| 'shaderdeleted'
 	| 'shadersource'
 	| 'recompileshader'
+	| 'recompileshader'
+	| 'requestanimationframe'
 	;
 
 // Same as CustomEventInit with required detail
@@ -19,6 +21,7 @@ export class Controller {
 	static addEventListener(type: 'shaderdeleted', callback: (evt: CustomEvent<ShaderSource>) => void, options?: AddEventListenerOptions | boolean): void;
 	static addEventListener(type: 'shadersource', callback: (evt: CustomEvent<ShaderSource>) => void, options?: AddEventListenerOptions | boolean): void;
 	static addEventListener(type: 'recompileshader', callback: (evt: CustomEvent<RecompileShader>) => void, options?: AddEventListenerOptions | boolean): void;
+	static addEventListener(type: 'requestanimationframe', callback: (evt: CustomEvent<DOMHighResTimeStamp>) => void, options?: AddEventListenerOptions | boolean): void;
 	static addEventListener(type: ControllerEvent, callback: (evt: CustomEvent) => void, options?: AddEventListenerOptions | boolean): void {
 		this.#eventTarget.addEventListener(type, callback as (evt: Event) => void, options);
 	}
@@ -27,6 +30,7 @@ export class Controller {
 	static dispatchEvent(type: 'shaderdeleted', options: ControllerEventInit<ShaderSource>): boolean;
 	static dispatchEvent(type: 'shadersource', options: ControllerEventInit<ShaderSource>): boolean;
 	static dispatchEvent(type: 'recompileshader', options: ControllerEventInit<RecompileShader>): boolean;
+	static dispatchEvent(type: 'requestanimationframe', options: ControllerEventInit<DOMHighResTimeStamp>): boolean;
 	static dispatchEvent<T>(type: ControllerEvent, options?: CustomEventInit<T>): boolean {
 		return this.#eventTarget.dispatchEvent(new CustomEvent<T>(type, options));
 	}
