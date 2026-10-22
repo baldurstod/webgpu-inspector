@@ -1,22 +1,50 @@
+import { Controller } from './controller';
+import { getMethod } from './methods';
 import { ContextType, Record } from './record';
+
+const GL_FRAGMENT_SHADER = 0x8B30;
+const GL_VERTEX_SHADER = 0x8B31;
+const SHADER_TYPE = 0x8B4F;
+
+export type ShaderRecord = {
+	name: string;
+	type: GLenum;
+	source?: string;
+}
+
+type ProgramRecord = {
+	vertex?: WebGLShader;
+	fragment?: WebGLShader;
+	unknown?: WebGLShader;//TODO: remove this
+}
 
 export class Recorder {
 	#recording = true;
 	#currentId = 0;
+	#currentShaderId = 0;
 	#lastRequestAnimationFrame = -1;
 	readonly #records = new Set<Record>();
+	readonly #shaders = new Map<WebGLShader, ShaderRecord>();
+	readonly #programs = new Map<WebGLProgram, ProgramRecord>();
 
 	setRecording(recording: boolean): void {
 		this.#recording = recording;
 	}
 
-	reset(): void {
+	clearRecords(): void {
 		this.#currentId = 0;
 		this.#records.clear();
 	}
 
-	addRecord(contextType: ContextType, functionName: string, ...args: any[]) {
+	reset(): void {
+		this.clearRecords();
+		this.#shaders.clear();
+	}
+
+	addRecord(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, functionName: string, args: any[], result: any) {
 		//console.debug(`Adding new ${contextType} record ${this.#currentId}`);
+		this.#processRecord(contextType, context, functionName, args, result);
+
 		if (!this.#recording) {
 			return;
 		}
@@ -25,8 +53,84 @@ export class Recorder {
 		++this.#currentId;
 	}
 
+	#getShaderName(): string {
+		return `Shader ${++this.#currentShaderId}`;
+	}
+
+	#processRecord(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, functionName: string, args: any[], result: any): void {
+		switch (functionName) {
+			case 'createProgram':
+				this.#programs.set(result, {});
+				//console.debug(`A ${contextType} program was created`, result, args[0]);
+				break;
+			case 'attachShader':
+				const program = this.#getProgram(args[0]);
+				const shader = this.#getShader(contextType, context, args[1]);
+				const type = getShaderType(shader.type);
+
+				program[type] = args[1];
+				//console.debug(`A ${contextType} shader was attached`, args[0], args[1]);
+				//console.debug(program);
+				break;
+			case 'createShader':
+				this.#shaders.set(result, { name: this.#getShaderName(), type: args[0] as GLenum, });
+				//console.debug(`A ${contextType} ${getShaderType(args[0])} shader was created`, result, args[0]);
+				break;
+			case 'shaderSource': {
+				const shader = this.#getShader(contextType, context, args[0]);
+				// Store the source
+				shader.source = args[1];
+				//console.debug(`A ${contextType} ${getShaderType(shader.type)} source was set`, args[0], args[1]);
+
+				Controller.dispatchEvent('shadersource', { detail: shader });
+				break;
+			}
+		}
+	}
+
+	#getShader(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, webGLShader: WebGLShader): ShaderRecord {
+		let shader = this.#shaders.get(webGLShader);
+
+		// Shader should exist at this point, but just in case
+		if (!shader) {
+			let shaderType = -1;
+
+			// Get the shader type
+			const getShaderParameter = getMethod(contextType, 'getShaderParameter');
+			if (getShaderParameter) {
+				shaderType = getShaderParameter.apply(context, [webGLShader, SHADER_TYPE]);
+			}
+
+			shader = { name: this.#getShaderName(), type: shaderType };
+			this.#shaders.set(webGLShader, shader);
+		}
+
+		return shader;
+	}
+
+	#getProgram(webGLProgram: WebGLProgram): ProgramRecord {
+		let program = this.#programs.get(webGLProgram);
+		// Program should exist at this point, but just in case
+		if (!program) {
+			program = {};
+			this.#programs.set(webGLProgram, program);
+		}
+		return program;
+	}
+
 	requestAnimationFrame(): void {
 		this.#lastRequestAnimationFrame = ++this.#currentId;
 		//console.info('request', this.#currentId);
+	}
+}
+
+export function getShaderType(type: GLenum): 'vertex' | 'fragment' | 'unknown' {
+	switch (type) {
+		case GL_VERTEX_SHADER:
+			return 'vertex';
+		case GL_FRAGMENT_SHADER:
+			return 'fragment';
+		default:
+			return 'unknown';
 	}
 }

@@ -27,6 +27,8 @@
     "typescript-eslint": "^8.71.1"
   },
   "dependencies": {
+    "ace-builds": "^1.44.0",
+    "harmony-browser-utils": "github:baldurstod/harmony-browser-utils",
     "harmony-svg": "github:baldurstod/harmony-svg",
     "harmony-ui": "github:baldurstod/harmony-ui",
     "translations": "github:baldurstod/translations"

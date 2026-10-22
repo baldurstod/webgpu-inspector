@@ -4,16 +4,20 @@ import { Map2 } from 'harmony-utils';
 import marketHistoryCSS from '../../css/content.css';
 import english from '../../json/i18n/english.json';
 import french from '../../json/i18n/french.json';
+import { addMethod } from './methods';
 import { readyPromise } from './ready';
+import { ContextType } from './record';
 import { Recorder } from './recorder';
+import { ShaderEditor } from './view/shadereditor';
 
 const SUFFIX = '-webgpu-inspector';
 
 export class Application {
 	#allowed: { webgl: boolean, webgl2: boolean, webgpu: boolean } = { webgl: true, webgl2: true, webgpu: true };
 	#htmlPanel?: ShadowRoot;
+	#htmlShaderEditor?: ShaderEditor;
 	#recorder = new Recorder();
-	#methods = new Map2<'webgl' | 'webgl2', string, Function>();
+	#methods = new Map2<ContextType, string, Function>();
 	#webGLInitialized: { webgl: boolean, webgl2: boolean } = { webgl: false, webgl2: false };
 	#originalOffscreenCanvasGetContext = window.OffscreenCanvas.prototype.getContext;
 	#originalHTMLCanvasElementGetContext = window.HTMLCanvasElement.prototype.getContext;
@@ -42,6 +46,8 @@ export class Application {
 		defineHarmonySwitch(SUFFIX);
 		defineHarmonyTabGroup(SUFFIX);
 		defineHarmonyTab(SUFFIX);
+
+		this.#htmlShaderEditor = new ShaderEditor();
 
 		// We wait for page readiness. document.body doesn't exist before that
 		await readyPromise;
@@ -127,11 +133,11 @@ export class Application {
 						childs: [
 							createElement('harmony-tab' + SUFFIX, {
 								'data-i18n': '#records',
-								innerText: 'test',
+								innerText: 'records',
 							}),
 							createElement('harmony-tab' + SUFFIX, {
 								'data-i18n': '#shaders',
-								innerText: 'test',
+								child: this.#htmlShaderEditor.htmlElement,
 							}),
 						],
 					}),
@@ -252,7 +258,6 @@ export class Application {
 		const webGLAnyContext = this.#originalHTMLCanvasElementGetContext.call(canvas, contextId);
 		console.info(webGLAnyContext);
 
-
 		if (!webGLAnyContext) {
 			console.error(`Unable to create a ${contextId} context`);
 		}
@@ -266,14 +271,17 @@ export class Application {
 			}
 
 			this.#methods.set(contextId, propertyName, propertyValue);
+			addMethod(contextId, propertyName, propertyValue);
 			const that = this;
 
 			(context.prototype as any)[propertyName] = function (...args: any[]): any {
-				that.#recorder.addRecord(contextId, propertyName, args);
 				if (!that.#allowed[contextId]) {
 					return null;
 				}
-				return propertyValue.apply(this, args);
+				const result = propertyValue.apply(this, args);
+				that.#recorder.addRecord(contextId, this, propertyName, args, result);
+
+				return result;
 			};
 		}
 	}

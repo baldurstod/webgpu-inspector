@@ -8,6 +8,8 @@
 		"#enable_webgl",
 		"#enable_webgl2",
 		"#enable_webgpu",
+		"#shaders",
+		"#records",
 		""
 	]
 }
