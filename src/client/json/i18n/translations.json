@@ -1,0 +1,12 @@
+{
+	"langs": [
+		"english",
+		"french"
+	],
+	"strings": [
+		"#enable_webgl",
+		"#enable_webgl2",
+		"#enable_webgpu",
+		""
+	]
+}

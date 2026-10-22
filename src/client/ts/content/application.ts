@@ -1,12 +1,16 @@
-import { fullscreenExitSVG, fullscreenSVG, radioButtonCheckedSVG } from 'harmony-svg';
-import { addRemoveClass, createElement, createShadowRoot, defineHarmonySwitch, defineHarmonyToggleButton, HTMLHarmonySwitchElement, HTMLHarmonyToggleButtonElement } from 'harmony-ui';
+import { fullscreenExitSVG, fullscreenSVG } from 'harmony-svg';
+import { addRemoveClass, createElement, createShadowRoot, defineHarmonySwitch, defineHarmonyToggleButton, HTMLHarmonySwitchElement, HTMLHarmonyToggleButtonElement, I18n } from 'harmony-ui';
 import marketHistoryCSS from '../../css/content.css';
+import english from '../../json/i18n/english.json';
+import french from '../../json/i18n/french.json';
 import { readyPromise } from './ready';
 import { Recorder } from './recorder';
 
+const SUFFIX = '-webgpu-inspector';
+
 export class Application {
 	#webGLAllowed = true;
-	#webGL2Allowed = false;
+	#webGL2Allowed = true;
 	#webGPUAllowed = true;
 	#htmlPanel?: ShadowRoot;
 	#recorder = new Recorder();
@@ -14,13 +18,25 @@ export class Application {
 	#webGL2Methods = new Map<string, Function>();
 	#webGLInitialized = false;
 	#webGL2Initialized = false;
-
+	#customRegistry!: CustomElementRegistry;
 	#originalOffscreenCanvasGetContext = window.OffscreenCanvas.prototype.getContext;
 	#originalHTMLCanvasElementGetContext = window.HTMLCanvasElement.prototype.getContext;
 
 	constructor() {
+		try {
+			this.#customRegistry = new CustomElementRegistry();
+		} catch (e) {
+			console.error('Unable to create custom registry:', e);
+		}
 		this.#initOffscreenCanvas();
 		this.#initHTMLCanvasElement();
+		void this.#initI18n();
+	}
+
+	async #initI18n(): Promise<void> {
+		await readyPromise;
+		I18n.setOptions({ translations: [english, french] });
+		I18n.start();
 	}
 
 	async #initPanel(): Promise<void> {
@@ -28,8 +44,8 @@ export class Application {
 			return;
 		}
 
-		defineHarmonyToggleButton();
-		defineHarmonySwitch();
+		defineHarmonyToggleButton(SUFFIX);
+		defineHarmonySwitch(SUFFIX);
 
 		// We wait for page readiness. document.body doesn't exist before that
 		await readyPromise;
@@ -42,7 +58,7 @@ export class Application {
 				createElement('div', {
 					class: 'header',
 					childs: [
-						createElement('harmony-toggle-button', {
+						createElement('harmony-toggle-button' + SUFFIX, {
 							state: false,
 							childs: [
 								createElement('div', {
@@ -66,20 +82,22 @@ export class Application {
 				createElement('div', {
 					class: 'toolbar',
 					childs: [
+						/*
 						createElement('span', {
 							innerHTML: radioButtonCheckedSVG,
 						}),
-						createElement('harmony-switch', {
+						*/
+						createElement('harmony-switch' + SUFFIX, {
 							'data-i18n': '#enable_webgl',
 							state: this.#webGLAllowed,
 							$change: (event: Event) => this.#webGLAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
 						}),
-						createElement('harmony-switch', {
+						createElement('harmony-switch' + SUFFIX, {
 							'data-i18n': '#enable_webgl2',
 							state: this.#webGL2Allowed,
 							$change: (event: Event) => this.#webGL2Allowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
 						}),
-						createElement('harmony-switch', {
+						createElement('harmony-switch' + SUFFIX, {
 							'data-i18n': '#enable_webgpu',
 							state: this.#webGPUAllowed,
 							$change: (event: Event) => this.#webGPUAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,

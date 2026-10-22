@@ -14,6 +14,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
+    "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
     "rollup": "^4.64.5",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "harmony-svg": "github:baldurstod/harmony-svg",
-    "harmony-ui": "github:baldurstod/harmony-ui"
+    "harmony-ui": "github:baldurstod/harmony-ui",
+    "translations": "github:baldurstod/translations"
   }
 }

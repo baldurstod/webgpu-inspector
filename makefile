@@ -18,3 +18,7 @@ endef
 
 lint:
 	npx eslint ./src/client/ts/**
+
+
+translations:
+	rollup -c --environment TRANSLATIONS:true

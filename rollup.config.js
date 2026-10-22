@@ -1,11 +1,19 @@
+import json from '@rollup/plugin-json';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import typescript from '@rollup/plugin-typescript';
 import copy from 'rollup-plugin-copy';
 import del from 'rollup-plugin-delete';
 import css from 'rollup-plugin-import-css';
+import { buildTranslations } from 'translations';
 
 const isProduction = process.env.BUILD === 'production';
 const isFirefox = process.env.BROWSER === 'firefox';
+const doTranslations = process.env.TRANSLATIONS === 'true';
+
+if (doTranslations) {
+	console.info('Building translations');
+	await buildTranslations('./src/client/json/i18n/translations.json', './src/client/json/i18n/', undefined, '\t');
+}
 
 export default [
 	{
@@ -20,6 +28,9 @@ export default [
 			isProduction ? del({ targets: 'build/client/*' }) : null,
 			typescript(),
 			css(),
+			json({
+				compact: true,
+			}),
 			nodeResolve({ dedupe: ['harmony-ui'] }),
 			isProduction ? terser() : null,
 			copy({

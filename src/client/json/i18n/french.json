@@ -1,0 +1,9 @@
+{
+	"lang": "french",
+	"strings": {
+		"#enable_webgl": "Activer WebGL",
+		"#enable_webgl2": "Activer WebGL2",
+		"#enable_webgpu": "Activer WebGPU",
+		"": ""
+	}
+}
