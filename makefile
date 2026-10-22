@@ -15,3 +15,6 @@ define make_zip
 	mkdir -p dist
 	cd ./build/client && zip -r "../../dist/webgpuinspector_$(1)_$(shell jq '.version' build/client/manifest.json)_$(shell date '+%Y_%m_%d').zip" .
 endef
+
+lint:
+	npx eslint ./src/client/ts/**

@@ -175,7 +175,9 @@ if (libDomPath !== '') {
 		knowMethods.add(methodName);
 
 		// Main string
-		let s = `\t${methodName}(`;
+
+		let s = `\tconst original${methodName} = window.WebGL2RenderingContext.prototype.${methodName};\n`;
+		s += `\twindow.WebGL2RenderingContext.prototype.${methodName} = function (`;
 
 		// Original function call parameters
 		let s2 = '';
@@ -186,8 +188,8 @@ if (libDomPath !== '') {
 		s += `): ${returnType} {\n`;
 
 
-		s += `\t\tconsole.info('MyWebGL2RenderingContext ${methodName}', ${s2});\n`;
-		s += `\t\treturn this.#renderingContext.${methodName}(${s2});\n`;
+		//s += `\t\tconsole.info('MyWebGL2RenderingContext ${methodName}', ${s2});\n`;
+		s += `\t\treturn original${methodName}.call(this, ${s2});\n`;
 
 		s += `\t}\n\n`
 		//console.info(s);
@@ -195,12 +197,11 @@ if (libDomPath !== '') {
 		methods.push(s);
 
 		/*
-texImage2D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, height: GLsizei, border: GLint, format: GLenum, type: GLenum, pixels: ArrayBufferView<ArrayBufferLike> | null): void {
-	console.info('MyWebGL2RenderingContext texImage2D', target, level, internalformat, width, height, border, format, type, pixels);
-	return this.#renderingContext.texImage2D(target, level, internalformat, width, height, border, format, type, pixels);
-}
 
-`)
+window.WebGL2RenderingContext.prototype.shaderSource = function (shader: WebGLShader, source: string): void {
+	console.debug('WebGL2RenderingContext shaderSource', shader, source);
+	return originalShaderSource.call(this, shader, source);
+}
 */
 
 	}

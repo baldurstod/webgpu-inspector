@@ -1,0 +1,43 @@
+:host {
+	position: absolute;
+	top: 0;
+	left: 0;
+	background-color: brown;
+	z-index: 1000;
+	/*
+	width: 15rem;
+	height: 4rem;
+	*/
+}
+
+.header {
+	display: flex;
+	align-items: center;
+}
+
+:host(.maximized) {
+	min-width: 20rem;
+	height: 100%;
+}
+
+.extension-name {
+	font-size: 2rem;
+}
+
+:host(.maximized) .extension-name {
+	display: none;
+}
+
+.toolbar,
+.content {
+	display: none;
+}
+
+:host(.maximized) .toolbar,
+:host(.maximized) .content {
+	display: flex;
+}
+
+.toolbar svg {
+	cursor: pointer;
+}

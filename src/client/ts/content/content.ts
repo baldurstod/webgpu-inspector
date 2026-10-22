@@ -1,9 +1,14 @@
-import { init } from './offscreencanvas';
-import { initWebGL2 } from './webgl2';
+import { Application } from './application';
+import { readyPromise } from './ready';
+import { initWebGL2RenderingContext } from './webgl2';
 
-init();
-initWebGL2();
+// This must be done before waiting for readiness
+//initWebGL2RenderingContext();
 
+async function startup(): Promise<void> {
+	await readyPromise;
+}
 
+void startup();
 
-console.info('test')
+new Application();
