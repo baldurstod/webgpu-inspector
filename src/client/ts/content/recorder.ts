@@ -120,14 +120,8 @@ export class Recorder {
 				}
 				break;
 			case 'deleteShader':
-				{
-					func.apply(context, args);// TODO: prevent deletion if we want to recompile ?
-					const shader = this.#deleteShader(args[0]);
-					if (shader) {
-						Controller.dispatchEvent('shaderdeleted', { detail: shader });
-						//console.error(`A ${contextType} ${getShaderType(shader.type)} shader was deleted`, args[0]);
-					}
-				}
+			case 'deleteProgram':
+				// Prevents deletion for the recompile feature
 				break;
 			case 'shaderSource':
 				{
@@ -317,7 +311,7 @@ export class Recorder {
 		shaderSource.apply(shader.context, [webGLShader, source]);
 		compileShader.apply(shader.context, [webGLShader]);
 		const compileStatus = getShaderParameter.apply(shader.context, [webGLShader, shader.context.COMPILE_STATUS]);
-		console.debug('compileShader result', compileStatus);
+		//console.debug('compileShader result', compileStatus);
 		if (!compileStatus) {
 			console.error('Failed to compile shader', shader);
 			return;
@@ -342,7 +336,7 @@ export class Recorder {
 			if (!newUniforms) {
 				continue;
 			}
-			console.debug('New program uniforms', newUniforms, programRecord);
+			//console.debug('New program uniforms', newUniforms, programRecord);
 
 			// Map the old uniforms to the new uniforms
 			const a = this.#siteUniformLocation.getSubMap(program);
@@ -359,7 +353,7 @@ export class Recorder {
 			}
 		}
 
-		console.log('uniformLocations after compilation', this.#uniformLocations);
+		//console.log('uniformLocations after compilation', this.#uniformLocations);
 	}
 }
 
