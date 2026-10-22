@@ -3,6 +3,7 @@ import { ContextType, Record } from './record';
 export class Recorder {
 	#recording = true;
 	#currentId = 0;
+	#lastRequestAnimationFrame = -1;
 	readonly #records = new Set<Record>();
 
 	setRecording(recording: boolean): void {
@@ -22,5 +23,10 @@ export class Recorder {
 
 		const record = new Record(contextType, functionName, this.#currentId, performance.now(), args);
 		++this.#currentId;
+	}
+
+	requestAnimationFrame(): void {
+		this.#lastRequestAnimationFrame = ++this.#currentId;
+		//console.info('request', this.#currentId);
 	}
 }

@@ -4,6 +4,7 @@
 		"french"
 	],
 	"strings": [
+		"#enable_all",
 		"#enable_webgl",
 		"#enable_webgl2",
 		"#enable_webgpu",

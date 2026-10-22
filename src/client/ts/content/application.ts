@@ -1,5 +1,5 @@
 import { fullscreenExitSVG, fullscreenSVG } from 'harmony-svg';
-import { addRemoveClass, createElement, createShadowRoot, defineHarmonySwitch, defineHarmonyToggleButton, HTMLHarmonySwitchElement, HTMLHarmonyToggleButtonElement, I18n } from 'harmony-ui';
+import { addRemoveClass, createElement, createShadowRoot, defineHarmonySwitch, defineHarmonyTab, defineHarmonyTabGroup, defineHarmonyToggleButton, HTMLHarmonySwitchElement, HTMLHarmonyToggleButtonElement, I18n } from 'harmony-ui';
 import marketHistoryCSS from '../../css/content.css';
 import english from '../../json/i18n/english.json';
 import french from '../../json/i18n/french.json';
@@ -21,6 +21,8 @@ export class Application {
 	#customRegistry!: CustomElementRegistry;
 	#originalOffscreenCanvasGetContext = window.OffscreenCanvas.prototype.getContext;
 	#originalHTMLCanvasElementGetContext = window.HTMLCanvasElement.prototype.getContext;
+	#originalRequestAnimationFrame = window.requestAnimationFrame;
+	#originalCancelAnimationFrame = window.cancelAnimationFrame;
 
 	constructor() {
 		try {
@@ -28,6 +30,7 @@ export class Application {
 		} catch (e) {
 			console.error('Unable to create custom registry:', e);
 		}
+		this.#initRequestAnimationFrame();
 		this.#initOffscreenCanvas();
 		this.#initHTMLCanvasElement();
 		void this.#initI18n();
@@ -46,9 +49,14 @@ export class Application {
 
 		defineHarmonyToggleButton(SUFFIX);
 		defineHarmonySwitch(SUFFIX);
+		defineHarmonyTabGroup(SUFFIX);
+		defineHarmonyTab(SUFFIX);
 
 		// We wait for page readiness. document.body doesn't exist before that
 		await readyPromise;
+
+
+		let gl: HTMLHarmonySwitchElement, gl2: HTMLHarmonySwitchElement, gpu: HTMLHarmonySwitchElement;
 
 		this.#htmlPanel = createShadowRoot('div', {
 			adoptStyles: [marketHistoryCSS],
@@ -77,6 +85,40 @@ export class Application {
 							class: 'extension-name',
 							innerText: 'WebGPU inspector',
 						}),
+						createElement('span', {
+							class: 'toggles',
+							childs: [
+								createElement('harmony-switch' + SUFFIX, {
+									'data-i18n': '#enable_all',
+									state: true,
+									$change: (event: Event) => {
+										const state = (event.target as HTMLHarmonySwitchElement).state as boolean;
+										this.#webGLAllowed = state;
+										this.#webGL2Allowed = state;
+										this.#webGPUAllowed = state;
+
+										gl.state = state;
+										gl2.state = state;
+										gpu.state = state;
+									},
+								}),
+								gl = createElement('harmony-switch' + SUFFIX, {
+									'data-i18n': '#enable_webgl',
+									state: this.#webGLAllowed,
+									$change: (event: Event) => this.#webGLAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
+								}) as HTMLHarmonySwitchElement,
+								gl2 = createElement('harmony-switch' + SUFFIX, {
+									'data-i18n': '#enable_webgl2',
+									state: this.#webGL2Allowed,
+									$change: (event: Event) => this.#webGL2Allowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
+								}) as HTMLHarmonySwitchElement,
+								gpu = createElement('harmony-switch' + SUFFIX, {
+									'data-i18n': '#enable_webgpu',
+									state: this.#webGPUAllowed,
+									$change: (event: Event) => this.#webGPUAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
+								}) as HTMLHarmonySwitchElement,
+							],
+						}),
 					],
 				}),
 				createElement('div', {
@@ -87,25 +129,22 @@ export class Application {
 							innerHTML: radioButtonCheckedSVG,
 						}),
 						*/
-						createElement('harmony-switch' + SUFFIX, {
-							'data-i18n': '#enable_webgl',
-							state: this.#webGLAllowed,
-							$change: (event: Event) => this.#webGLAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
-						}),
-						createElement('harmony-switch' + SUFFIX, {
-							'data-i18n': '#enable_webgl2',
-							state: this.#webGL2Allowed,
-							$change: (event: Event) => this.#webGL2Allowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
-						}),
-						createElement('harmony-switch' + SUFFIX, {
-							'data-i18n': '#enable_webgpu',
-							state: this.#webGPUAllowed,
-							$change: (event: Event) => this.#webGPUAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
-						}),
 					],
 				}),
 				createElement('div', {
 					class: 'content',
+					child: createElement('harmony-tab-group' + SUFFIX, {
+						childs: [
+							createElement('harmony-tab' + SUFFIX, {
+								'data-i18n': '#records',
+								innerText: 'test',
+							}),
+							createElement('harmony-tab' + SUFFIX, {
+								'data-i18n': '#shaders',
+								innerText: 'test',
+							}),
+						],
+					}),
 					childs: [
 						createElement('div', {
 							class: 'filters',
@@ -121,6 +160,22 @@ export class Application {
 				}),
 			],
 		});
+	}
+
+	#initRequestAnimationFrame(): void {
+		window.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+
+			const c: (time: DOMHighResTimeStamp) => void = time => {
+				this.#recorder.requestAnimationFrame();
+				callback(time);
+			}
+
+			return this.#originalRequestAnimationFrame.call(window, c);
+		};
+
+		window.cancelAnimationFrame = (handle: number): void => {
+			this.#originalCancelAnimationFrame.call(window, handle);
+		};
 	}
 
 	#initOffscreenCanvas(): void {
