@@ -25,6 +25,11 @@ type ProgramRecord = {
 	unknown?: WebGLShader;//TODO: remove this
 }
 
+type UniformValue = {
+	method: 'uniform1f' | 'uniform1fv' | 'uniform1i' | 'uniform1iv' | 'uniform2f' | 'uniform2fv' | 'uniform2i' | 'uniform2iv' | 'uniform3f' | 'uniform3fv' | 'uniform3i' | 'uniform3iv' | 'uniform4f' | 'uniform4fv' | 'uniform4i' | 'uniform4iv' | 'uniformMatrix2fv' | 'uniformMatrix3fv' | 'uniformMatrix4fv';
+	value: any[];
+}
+
 export class Recorder {
 	#recording = true;
 	#currentId = 0;
@@ -38,6 +43,7 @@ export class Recorder {
 	readonly #siteUniformLocation = new Map2<WebGLProgram, string, WebGLUniformLocation>();
 	/** Map the old uniform location to the new one */
 	readonly #uniformLocations = new Map<WebGLUniformLocation, WebGLUniformLocation>();
+	readonly #uniformValues = new Map<WebGLUniformLocation, UniformValue>();
 
 	constructor() {
 		Controller.addEventListener('recompileshader', (event) => this.#recompileShader(event.detail));
@@ -179,18 +185,14 @@ export class Recorder {
 					if (newLocation) {
 						args[0] = newLocation;
 					}
-					//console.log('uniform1f', args);
+
+					// Store the value for later use
+					this.#uniformValues.set(oldLocation, {
+						method: functionName,
+						value: args,
+					});
 
 					func.apply(context, args);
-					/*
-					const getError = getMethod(contextType, 'getError');
-					if (getError) {
-						const error = getError.apply(context);
-						if (error) {
-							//console.debug('uniform1f failed with error', error, oldLocation);
-						}
-					}
-					*/
 				}
 				break;
 			default:
@@ -298,7 +300,9 @@ export class Recorder {
 		const getShaderParameter = getMethod(shader.contextType, 'getShaderParameter');
 		const linkProgram = getMethod(shader.contextType, 'linkProgram');
 		const getProgramParameter = getMethod(shader.contextType, 'getProgramParameter');
-		if (!shaderSource || !compileShader || !getShaderParameter || !linkProgram || !getProgramParameter) {
+		const getParameter = getMethod(shader.contextType, 'getParameter');
+		const useProgram = getMethod(shader.contextType, 'useProgram');
+		if (!shaderSource || !compileShader || !getShaderParameter || !linkProgram || !getProgramParameter || !getParameter || !useProgram) {
 			return;
 		}
 
@@ -312,7 +316,11 @@ export class Recorder {
 			return;
 		}
 
+		// Store the current program
+		const currentProgram = getParameter.apply(shader.context, [shader.context.CURRENT_PROGRAM]) as WebGLProgram | null;
+
 		// Link all programs
+		// TODO: only link program(s) using the involved shader
 		for (const [program] of this.#programs) {
 			const programRecord = this.#getProgram(shader.contextType, shader.context, program);
 
@@ -335,6 +343,10 @@ export class Recorder {
 			if (!programUniforms) {
 				continue;
 			}
+
+			// Use the linked program
+			useProgram.apply(shader.context, [program]);
+
 			for (const [name, oldUniform] of programUniforms) {
 				const newUniform = newUniforms.get(name);
 				if (!newUniform) {
@@ -342,10 +354,25 @@ export class Recorder {
 				}
 
 				this.#uniformLocations.set(oldUniform, newUniform);
+
+				// Set the new value, the site may not update the value by itself
+				const value = this.#uniformValues.get(oldUniform);
+				if (!value) {
+					continue;
+				}
+
+				const uniformSetter = getMethod(shader.contextType, value.method);
+				if (uniformSetter) {
+					value.value[0] = newUniform;
+					uniformSetter.apply(shader.context, value.value);
+				}
 			}
 		}
 
-		//console.log('uniformLocations after compilation', this.#uniformLocations);
+		// Restore the previously used program
+		if (currentProgram) {
+			useProgram.apply(shader.context, [currentProgram]);
+		}
 	}
 }
 
