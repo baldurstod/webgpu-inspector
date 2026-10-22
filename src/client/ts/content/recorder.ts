@@ -23,7 +23,6 @@ type ProgramRecord = {
 	vertex?: WebGLShader;
 	fragment?: WebGLShader;
 	unknown?: WebGLShader;//TODO: remove this
-	uniforms?: Map<string, WebGLUniformLocation>;
 }
 
 export class Recorder {
@@ -138,10 +137,6 @@ export class Recorder {
 				{
 					func.apply(context, args);
 					const program = this.#getProgram(contextType, context, args[0]);
-					const uniforms = this.#getProgramUniforms(program);
-					if (uniforms) {
-						program.uniforms = uniforms;
-					}
 				}
 				break;
 			case 'getUniformLocation':
@@ -216,15 +211,15 @@ export class Recorder {
 		//console.log('Link program activeUniforms', activeUniforms);
 		const result = new Map<string, WebGLUniformLocation>();
 		for (let i = 0; i < activeUniforms; i++) {
-			const attribInfo = getActiveUniform.apply(program.context, [program.program, i]);
-			if (!attribInfo) {
+			const uniformInfo = getActiveUniform.apply(program.context, [program.program, i]) as WebGLActiveInfo | null;
+			if (!uniformInfo) {
 				continue;
 			}
-			const uniformLocation = getUniformLocation.apply(program.context, [program.program, attribInfo.name]) as WebGLUniformLocation | null;
+			const uniformLocation = getUniformLocation.apply(program.context, [program.program, uniformInfo.name]) as WebGLUniformLocation | null;
 
 			if (uniformLocation) {
 				//program.uniforms.set(attribInfo.name, uniformLocation);
-				result.set(attribInfo.name, uniformLocation);
+				result.set(uniformInfo.name, uniformLocation);
 			}
 
 		}
@@ -320,9 +315,6 @@ export class Recorder {
 		// Link all programs
 		for (const [program] of this.#programs) {
 			const programRecord = this.#getProgram(shader.contextType, shader.context, program);
-			if (!programRecord.uniforms) {
-				continue;
-			}
 
 			// Link the program
 			linkProgram.apply(shader.context, [program]);
@@ -339,11 +331,11 @@ export class Recorder {
 			//console.debug('New program uniforms', newUniforms, programRecord);
 
 			// Map the old uniforms to the new uniforms
-			const a = this.#siteUniformLocation.getSubMap(program);
-			if (!a) {
+			const programUniforms = this.#siteUniformLocation.getSubMap(program);
+			if (!programUniforms) {
 				continue;
 			}
-			for (const [name, oldUniform] of a/*programRecord.uniforms*/) {
+			for (const [name, oldUniform] of programUniforms) {
 				const newUniform = newUniforms.get(name);
 				if (!newUniform) {
 					continue;
