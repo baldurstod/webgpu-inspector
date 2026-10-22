@@ -3,6 +3,7 @@ import { loadScript } from 'harmony-browser-utils';
 import { createElement, I18n, shadowRootStyle } from 'harmony-ui';
 import shaderEditorCSS from '../../../css/shadereditor.css';
 import { Controller } from '../controller';
+import { getRuntimeURL } from '../messages';
 import { getShaderType, ShaderRecord } from '../recorder';
 import { ViewComponent } from './component';
 
@@ -12,6 +13,7 @@ export class ShaderEditor implements ViewComponent {
 	readonly htmlElement = createElement('div');
 	#shadowRoot?: ShadowRoot;
 	#htmlShaderSelect: HTMLSelectElement;
+	#htmlRecompile: HTMLButtonElement;
 	//#htmlShaderSource: HTMLTextAreaElement;
 	#shaders = new Map<string, ShaderRecord>()
 	#selectedShader?: string;
@@ -46,6 +48,10 @@ export class ShaderEditor implements ViewComponent {
 					}
 				}) as HTMLSelectElement,
 				//this.#htmlShaderSource = createElement('textarea') as HTMLTextAreaElement,
+				this.#htmlRecompile = createElement('button', {
+					i18n: '#recompile',
+					$click: () => this.#recompileShader(),
+				}) as HTMLButtonElement,
 				editorContainer = createElement('div', { style: 'flex:1;' }),
 			],
 		});
@@ -56,10 +62,17 @@ export class ShaderEditor implements ViewComponent {
 			this.#reloadShaderList();
 		});
 
-		loadScript(ACE_URL).then((result) => this.#initEditor(editorContainer));
+
+		void this.#initEditor(editorContainer);
+
 	}
 
-	#initEditor(container: HTMLElement): void {
+	async #initEditor(container: HTMLElement): Promise<void> {
+		const url = await getRuntimeURL(ACE_URL);
+		loadScript(url).then(() => this.#initEditor2(container));
+	}
+
+	#initEditor2(container: HTMLElement): void {
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-call
 		this.#shaderEditor = (globalThis as any).ace.edit(container) as Ace.Editor;
 		this.#shaderEditor.renderer.attachToShadowRoot();
@@ -155,4 +168,17 @@ export class ShaderEditor implements ViewComponent {
 		return session;
 	}
 
+	#recompileShader(): void {
+		const shaderSource = this.#shaderEditor?.getValue();
+		if (shaderSource === undefined) {
+			return;
+		}
+
+		Controller.dispatchEvent('recompileshader', {
+			detail: {
+				name: this.#htmlShaderSelect.value,
+				source: shaderSource,
+			}
+		})
+	}
 }

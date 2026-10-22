@@ -10,6 +10,7 @@
 		"#enable_webgpu",
 		"#shaders",
 		"#records",
+		"#recompile",
 		""
 	]
 }

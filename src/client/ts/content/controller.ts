@@ -1,7 +1,9 @@
 import { ShaderRecord } from './recorder';
 
 export type ControllerEvent =
-	'shadersource';
+	'shadersource'
+	| 'recompileshader'
+	;
 
 // Same as CustomEventInit with required detail
 export interface ControllerEventInit<T = any> extends EventInit {
@@ -12,11 +14,13 @@ export class Controller {
 	static readonly #eventTarget = new EventTarget();
 
 	static addEventListener(type: 'shadersource', callback: (evt: CustomEvent<ShaderSource>) => void, options?: AddEventListenerOptions | boolean): void;
+	static addEventListener(type: 'recompileshader', callback: (evt: CustomEvent<RecompileShader>) => void, options?: AddEventListenerOptions | boolean): void;
 	static addEventListener(type: ControllerEvent, callback: (evt: CustomEvent) => void, options?: AddEventListenerOptions | boolean): void {
 		this.#eventTarget.addEventListener(type, callback as (evt: Event) => void, options);
 	}
 
 	static dispatchEvent(type: 'shadersource', options: ControllerEventInit<ShaderSource>): boolean;
+	static dispatchEvent(type: 'recompileshader', options: ControllerEventInit<RecompileShader>): boolean;
 	static dispatchEvent<T>(type: ControllerEvent, options?: CustomEventInit<T>): boolean {
 		return this.#eventTarget.dispatchEvent(new CustomEvent<T>(type, options));
 	}
@@ -27,3 +31,8 @@ export class Controller {
 }
 
 export type ShaderSource = ShaderRecord;
+
+export type RecompileShader = {
+	name:string;
+	source:string;
+};

@@ -2,7 +2,7 @@
 	position: absolute;
 	top: 0;
 	left: 0;
-	background-color: brown;
+	background-color: var(--main-bg-color-bright);
 	z-index: 1000;
 	display: flex;
 	flex-direction: column;
@@ -20,10 +20,13 @@
 :host(.maximized) {
 	min-width: 20rem;
 	height: 100%;
+	border: 1px solid #FFF;
+	box-sizing: border-box;
 }
 
 .extension-name {
 	font-size: 2rem;
+	padding: 0.5rem;
 }
 
 :host(.maximized) .extension-name {

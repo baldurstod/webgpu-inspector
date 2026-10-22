@@ -42,4 +42,16 @@ export default [
 			}),
 		],
 	},
+
+	{
+		input: './src/client/ts/isolated/isolated.ts',
+		output: {
+			file: './build/client/isolated.js',
+			format: 'esm',
+		},
+		plugins: [
+			typescript(),
+			isProduction ? terser() : null,
+		],
+	},
 ];

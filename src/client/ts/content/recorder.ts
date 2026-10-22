@@ -1,4 +1,4 @@
-import { Controller } from './controller';
+import { Controller, RecompileShader } from './controller';
 import { getMethod } from './methods';
 import { ContextType, Record } from './record';
 
@@ -10,6 +10,8 @@ export type ShaderRecord = {
 	name: string;
 	type: GLenum;
 	source?: string;
+	contextType: ContextType;
+	context: WebGLRenderingContext | WebGL2RenderingContext;
 }
 
 type ProgramRecord = {
@@ -25,7 +27,12 @@ export class Recorder {
 	#lastRequestAnimationFrame = -1;
 	readonly #records = new Set<Record>();
 	readonly #shaders = new Map<WebGLShader, ShaderRecord>();
+	readonly #shadersByName = new Map<string, WebGLShader>();
 	readonly #programs = new Map<WebGLProgram, ProgramRecord>();
+
+	constructor() {
+		Controller.addEventListener('recompileshader', (event) => this.#recompileShader(event.detail));
+	}
 
 	setRecording(recording: boolean): void {
 		this.#recording = recording;
@@ -73,7 +80,7 @@ export class Recorder {
 				//console.debug(program);
 				break;
 			case 'createShader':
-				this.#shaders.set(result, { name: this.#getShaderName(), type: args[0] as GLenum, });
+				this.#addShader(result, { name: this.#getShaderName(), type: args[0] as GLenum, contextType, context });
 				//console.debug(`A ${contextType} ${getShaderType(args[0])} shader was created`, result, args[0]);
 				break;
 			case 'shaderSource': {
@@ -101,11 +108,16 @@ export class Recorder {
 				shaderType = getShaderParameter.apply(context, [webGLShader, SHADER_TYPE]);
 			}
 
-			shader = { name: this.#getShaderName(), type: shaderType };
-			this.#shaders.set(webGLShader, shader);
+			shader = { name: this.#getShaderName(), type: shaderType, contextType, context };
+			this.#addShader(webGLShader, shader);
 		}
 
 		return shader;
+	}
+
+	#addShader(webGLShader: WebGLShader, shader: ShaderRecord): void {
+		this.#shaders.set(webGLShader, shader);
+		this.#shadersByName.set(shader.name, webGLShader);
 	}
 
 	#getProgram(webGLProgram: WebGLProgram): ProgramRecord {
@@ -121,6 +133,35 @@ export class Recorder {
 	requestAnimationFrame(): void {
 		this.#lastRequestAnimationFrame = ++this.#currentId;
 		//console.info('request', this.#currentId);
+	}
+
+	#recompileShader({ name, source }: RecompileShader) {
+		//compileShader
+		const webGLShader = this.#shadersByName.get(name);
+		if (!webGLShader) {
+			return;
+		}
+		const shader = this.#shaders.get(webGLShader);
+		if (!shader) {
+			return;
+		}
+
+		const shaderSource = getMethod(shader.contextType, 'shaderSource');
+		const compileShader = getMethod(shader.contextType, 'compileShader');
+		const getShaderParameter = getMethod(shader.contextType, 'getShaderParameter');
+		const linkProgram = getMethod(shader.contextType, 'linkProgram');
+		if (shaderSource && compileShader && getShaderParameter && linkProgram) {
+			shaderSource.apply(shader.context, [webGLShader, source]);
+			compileShader.apply(shader.context, [webGLShader]);
+			const compileStatus = getShaderParameter.apply(shader.context, [webGLShader, shader.context.COMPILE_STATUS]);
+			console.debug('compileShader result', compileStatus);
+			if (compileStatus) {
+				for (const [program] of this.#programs) {
+					linkProgram.apply(shader.context, [program]);
+				}
+
+			}
+		}
 	}
 }
 
