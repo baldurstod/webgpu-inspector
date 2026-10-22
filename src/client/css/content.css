@@ -4,6 +4,8 @@
 	left: 0;
 	background-color: brown;
 	z-index: 1000;
+	display: flex;
+	flex-direction: column;
 	/*
 	width: 15rem;
 	height: 4rem;
@@ -28,9 +30,22 @@
 	display: none;
 }
 
+.toggles {
+	display: none;
+}
+
+:host(.maximized) .toggles {
+	display: flex;
+}
+
 .toolbar,
 .content {
 	display: none;
+}
+
+.content {
+	flex: 1;
+	background-color: blueviolet;
 }
 
 :host(.maximized) .toolbar,

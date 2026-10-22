@@ -1,5 +1,6 @@
 import { fullscreenExitSVG, fullscreenSVG } from 'harmony-svg';
 import { addRemoveClass, createElement, createShadowRoot, defineHarmonySwitch, defineHarmonyTab, defineHarmonyTabGroup, defineHarmonyToggleButton, HTMLHarmonySwitchElement, HTMLHarmonyToggleButtonElement, I18n } from 'harmony-ui';
+import { Map2 } from 'harmony-utils';
 import marketHistoryCSS from '../../css/content.css';
 import english from '../../json/i18n/english.json';
 import french from '../../json/i18n/french.json';
@@ -9,27 +10,17 @@ import { Recorder } from './recorder';
 const SUFFIX = '-webgpu-inspector';
 
 export class Application {
-	#webGLAllowed = true;
-	#webGL2Allowed = true;
-	#webGPUAllowed = true;
+	#allowed: { webgl: boolean, webgl2: boolean, webgpu: boolean } = { webgl: true, webgl2: true, webgpu: true };
 	#htmlPanel?: ShadowRoot;
 	#recorder = new Recorder();
-	#webGLMethods = new Map<string, Function>();
-	#webGL2Methods = new Map<string, Function>();
-	#webGLInitialized = false;
-	#webGL2Initialized = false;
-	#customRegistry!: CustomElementRegistry;
+	#methods = new Map2<'webgl' | 'webgl2', string, Function>();
+	#webGLInitialized: { webgl: boolean, webgl2: boolean } = { webgl: false, webgl2: false };
 	#originalOffscreenCanvasGetContext = window.OffscreenCanvas.prototype.getContext;
 	#originalHTMLCanvasElementGetContext = window.HTMLCanvasElement.prototype.getContext;
 	#originalRequestAnimationFrame = window.requestAnimationFrame;
 	#originalCancelAnimationFrame = window.cancelAnimationFrame;
 
 	constructor() {
-		try {
-			this.#customRegistry = new CustomElementRegistry();
-		} catch (e) {
-			console.error('Unable to create custom registry:', e);
-		}
 		this.#initRequestAnimationFrame();
 		this.#initOffscreenCanvas();
 		this.#initHTMLCanvasElement();
@@ -54,7 +45,6 @@ export class Application {
 
 		// We wait for page readiness. document.body doesn't exist before that
 		await readyPromise;
-
 
 		let gl: HTMLHarmonySwitchElement, gl2: HTMLHarmonySwitchElement, gpu: HTMLHarmonySwitchElement;
 
@@ -93,9 +83,9 @@ export class Application {
 									state: true,
 									$change: (event: Event) => {
 										const state = (event.target as HTMLHarmonySwitchElement).state as boolean;
-										this.#webGLAllowed = state;
-										this.#webGL2Allowed = state;
-										this.#webGPUAllowed = state;
+										this.#allowed.webgl = state;
+										this.#allowed.webgl2 = state;
+										this.#allowed.webgpu = state;
 
 										gl.state = state;
 										gl2.state = state;
@@ -104,18 +94,18 @@ export class Application {
 								}),
 								gl = createElement('harmony-switch' + SUFFIX, {
 									'data-i18n': '#enable_webgl',
-									state: this.#webGLAllowed,
-									$change: (event: Event) => this.#webGLAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
+									state: this.#allowed.webgl,
+									$change: (event: Event) => this.#allowed.webgl = (event.target as HTMLHarmonySwitchElement).state as boolean,
 								}) as HTMLHarmonySwitchElement,
 								gl2 = createElement('harmony-switch' + SUFFIX, {
 									'data-i18n': '#enable_webgl2',
-									state: this.#webGL2Allowed,
-									$change: (event: Event) => this.#webGL2Allowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
+									state: this.#allowed.webgl2,
+									$change: (event: Event) => this.#allowed.webgl2 = (event.target as HTMLHarmonySwitchElement).state as boolean,
 								}) as HTMLHarmonySwitchElement,
 								gpu = createElement('harmony-switch' + SUFFIX, {
 									'data-i18n': '#enable_webgpu',
-									state: this.#webGPUAllowed,
-									$change: (event: Event) => this.#webGPUAllowed = (event.target as HTMLHarmonySwitchElement).state as boolean,
+									state: this.#allowed.webgpu,
+									$change: (event: Event) => this.#allowed.webgpu = (event.target as HTMLHarmonySwitchElement).state as boolean,
 								}) as HTMLHarmonySwitchElement,
 							],
 						}),
@@ -187,21 +177,21 @@ export class Application {
 		window.OffscreenCanvas.prototype.getContext = function (this: OffscreenCanvas, contextId: OffscreenRenderingContextId, options?: any): OffscreenRenderingContext | null {
 			switch (contextId) {
 				case 'webgl':
-					if (!that.#webGLAllowed) {
+					if (!that.#allowed.webgl) {
 						return null;
 					}
 					that.#initWebGLHook();
 					void that.#initPanel();
 					break;
 				case 'webgl2':
-					if (!that.#webGL2Allowed) {
+					if (!that.#allowed.webgl2) {
 						return null;
 					}
 					that.#initWebGL2Hook();
 					void that.#initPanel();
 					break;
 				case 'webgpu':
-					if (!that.#webGPUAllowed) {
+					if (!that.#allowed.webgpu) {
 						return null;
 					}
 					void that.#initPanel();
@@ -220,21 +210,21 @@ export class Application {
 		window.HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, contextId: OffscreenRenderingContextId, options?: any): RenderingContext | null {
 			switch (contextId) {
 				case 'webgl':
-					if (!that.#webGLAllowed) {
+					if (!that.#allowed.webgl) {
 						return null;
 					}
 					that.#initWebGLHook();
 					void that.#initPanel();
 					break;
 				case 'webgl2':
-					if (!that.#webGL2Allowed) {
+					if (!that.#allowed.webgl2) {
 						return null;
 					}
 					that.#initWebGL2Hook();
 					void that.#initPanel();
 					break;
 				case 'webgpu':
-					if (!that.#webGPUAllowed) {
+					if (!that.#allowed.webgpu) {
 						return null;
 					}
 					void that.#initPanel();
@@ -245,101 +235,46 @@ export class Application {
 	}
 
 	#initWebGLHook(): void {
-		if (this.#webGLInitialized) {
+		this.#initWebAnyHook('webgl');
+	}
+
+	#initWebGL2Hook(): void {
+		this.#initWebAnyHook('webgl2');
+	}
+
+	#initWebAnyHook(contextId: 'webgl' | 'webgl2'): void {
+		if (this.#webGLInitialized[contextId]) {
 			return;
 		}
-		this.#webGLInitialized = true;
+		this.#webGLInitialized[contextId] = true;
 
 		const canvas = createElement('canvas') as HTMLCanvasElement;
-		const webGLContext = this.#originalHTMLCanvasElementGetContext.call(canvas, 'webgl');
-		console.info(webGLContext);
+		const webGLAnyContext = this.#originalHTMLCanvasElementGetContext.call(canvas, contextId);
+		console.info(webGLAnyContext);
 
-		if (!webGLContext) {
-			console.error('Unable to create a WebGL context');
-			return;
+
+		if (!webGLAnyContext) {
+			console.error(`Unable to create a ${contextId} context`);
 		}
 
-		const proto = Object.getPrototypeOf(webGLContext);
+		const proto = Object.getPrototypeOf(webGLAnyContext);
+		const context = contextId === 'webgl' ? window.WebGLRenderingContext : window.WebGL2RenderingContext;
 		for (const propertyName of Object.getOwnPropertyNames(proto)) {
-			const propertyValue = (webGLContext as any)[propertyName];
+			const propertyValue = (webGLAnyContext as any)[propertyName];
 			if (typeof propertyValue !== 'function') {
 				continue;
 			}
 
-			this.#webGLMethods.set(propertyName, propertyValue);
+			this.#methods.set(contextId, propertyName, propertyValue);
 			const that = this;
 
-			(window.WebGLRenderingContext.prototype as any)[propertyName] = function (...args: any[]): any {
-				that.#recorder.addRecord('webgl', propertyName, args);
-				if (!that.#webGLAllowed) {
+			(context.prototype as any)[propertyName] = function (...args: any[]): any {
+				that.#recorder.addRecord(contextId, propertyName, args);
+				if (!that.#allowed[contextId]) {
 					return null;
 				}
 				return propertyValue.apply(this, args);
 			};
 		}
 	}
-
-	#initWebGL2Hook(): void {
-		if (this.#webGL2Initialized) {
-			return;
-		}
-		this.#webGL2Initialized = true;
-		const canvas = createElement('canvas') as HTMLCanvasElement;
-		const webGL2Context = this.#originalHTMLCanvasElementGetContext.call(canvas, 'webgl2');
-		console.info(webGL2Context);
-
-		if (!webGL2Context) {
-			console.error('Unable to create a WebGL2 context');
-		}
-
-		const proto = Object.getPrototypeOf(webGL2Context);
-		for (const propertyName of Object.getOwnPropertyNames(proto)) {
-			const propertyValue = (webGL2Context as any)[propertyName];
-			if (typeof propertyValue !== 'function') {
-				continue;
-			}
-
-			this.#webGL2Methods.set(propertyName, propertyValue);
-			const that = this;
-
-			(window.WebGL2RenderingContext.prototype as any)[propertyName] = function (...args: any[]): any {
-				that.#recorder.addRecord('webgl2', propertyName, args);
-				if (!that.#webGL2Allowed) {
-					return null;
-				}
-				return propertyValue.apply(this, args);
-			};
-		}
-	}
-	/*
-	#initWebGL2Hook(): void {
-		const canvas = createElement('canvas') as HTMLCanvasElement;
-		const webGL2Context = this.#originalHTMLCanvasElementGetContext.call(canvas, 'webgl2');
-		console.info(webGL2Context);
-
-		if (!webGL2Context) {
-			console.error('Unable to create a WebGL2 context');
-		}
-
-		//Object.getOwnPropertyNames(WebGL2RenderingContext.prototype)
-
-		//console.log(Object.getOwnPropertyNames(WebGL2RenderingContext.prototype).filter(function (p) {
-		//console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(webGL2Context)).filter(function (p) {
-		const proto = Object.getPrototypeOf(webGL2Context);
-		console.log(proto);
-		console.log(Object.getOwnPropertyNames(proto));
-		console.log(Object.getOwnPropertyNames(webGL2Context));
-		//console.log(Object.getOwnPropertyNames(webGL2Context.prototype));
-		console.log(Object.getOwnPropertyNames(proto).filter(function (p) {
-			//console.log(webGL2Context[p])
-			if (webGL2Context[p] === undefined) {
-				console.log(p)
-			}
-			return typeof webGL2Context[p] === 'function';
-		}));
-
-		console.log(typeof webGL2Context['beginQuery'])
-	}
-	*/
-
 }
