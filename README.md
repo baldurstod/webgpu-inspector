@@ -1,1 +1,1 @@
-# webgpu-inspector2
+# webgpu-inspector
