@@ -49,7 +49,7 @@ export class Recorder {
 		this.#shaders.clear();
 	}
 
-	addRecord(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, functionName: string, args: any[], result: any) {
+	addRecord(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, functionName: string, args: any[], result: any, start: DOMHighResTimeStamp, duration: DOMHighResTimeStamp) {
 		//console.debug(`Adding new ${contextType} record ${this.#currentId}`);
 		this.#processRecord(contextType, context, functionName, args, result);
 
@@ -57,7 +57,7 @@ export class Recorder {
 			return;
 		}
 
-		const record = new Record(contextType, functionName, this.#currentId, performance.now(), args);
+		const record = new Record(contextType, functionName, this.#currentId, start, duration, args);
 		++this.#currentId;
 	}
 

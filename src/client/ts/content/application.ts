@@ -277,8 +277,10 @@ export class Application {
 				if (!that.#allowed[contextId]) {
 					return null;
 				}
+				const start = performance.now();
 				const result = propertyValue.apply(this, args);
-				that.#recorder.addRecord(contextId, this, propertyName, args, result);
+				const end = performance.now();
+				that.#recorder.addRecord(contextId, this, propertyName, args, result, start, end - start);
 
 				return result;
 			};
