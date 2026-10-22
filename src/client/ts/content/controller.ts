@@ -5,7 +5,6 @@ export type ControllerEvent =
 	| 'shaderdeleted'
 	| 'shadersource'
 	| 'recompileshader'
-	| 'recompileshader'
 	| 'requestanimationframe'
 	;
 

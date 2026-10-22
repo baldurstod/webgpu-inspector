@@ -126,7 +126,7 @@ export class Application {
 						createElement('div', {
 							childs: [
 								createElement('harmony-toggle-button' + SUFFIX, {
-									state: true,
+									state: this.#recorder.isRecording(),
 									'data-i18n': '#record',
 									childs: [
 										createElement('div', {
@@ -299,9 +299,9 @@ export class Application {
 					return null;
 				}
 				const start = performance.now();
-				const result = propertyValue.apply(this, args);
+				//const result = propertyValue.apply(this, args);
 				const end = performance.now();
-				that.#recorder.addRecord(contextId, this, propertyName, args, result, start, end - start);
+				const result =that.#recorder.addRecord(contextId, this, propertyName, propertyValue, args);
 
 				return result;
 			};
