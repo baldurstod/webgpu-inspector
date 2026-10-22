@@ -12,6 +12,7 @@ export type ShaderRecord = {
 	source?: string;
 	contextType: ContextType;
 	context: WebGLRenderingContext | WebGL2RenderingContext;
+	deleted: boolean;
 }
 
 type ProgramRecord = {
@@ -80,18 +81,32 @@ export class Recorder {
 				//console.debug(program);
 				break;
 			case 'createShader':
-				this.#addShader(result, { name: this.#getShaderName(), type: args[0] as GLenum, contextType, context });
-				//console.debug(`A ${contextType} ${getShaderType(args[0])} shader was created`, result, args[0]);
+				{
+					const shader = { name: this.#getShaderName(), type: args[0] as GLenum, contextType, context, deleted: false, } as ShaderRecord;
+					this.#addShader(result, shader);
+					//console.debug(`A ${contextType} ${getShaderType(args[0])} shader was created`, result, args[0]);
+					Controller.dispatchEvent('shaderadded', { detail: shader });
+				}
 				break;
-			case 'shaderSource': {
-				const shader = this.#getShader(contextType, context, args[0]);
-				// Store the source
-				shader.source = args[1];
-				//console.debug(`A ${contextType} ${getShaderType(shader.type)} source was set`, args[0], args[1]);
+			case 'deleteShader':
+				{
+					const shader = this.#deleteShader(args[0]);
+					if (shader) {
+						Controller.dispatchEvent('shaderdeleted', { detail: shader });
+						//console.error(`A ${contextType} ${getShaderType(shader.type)} shader was deleted`, args[0]);
+					}
+				}
+				break;
+			case 'shaderSource':
+				{
+					const shader = this.#getShader(contextType, context, args[0]);
+					// Store the source
+					shader.source = args[1];
+					//console.debug(`A ${contextType} ${getShaderType(shader.type)} source was set`, args[0], args[1]);
 
-				Controller.dispatchEvent('shadersource', { detail: shader });
+					Controller.dispatchEvent('shadersource', { detail: shader });
+				}
 				break;
-			}
 		}
 	}
 
@@ -108,7 +123,7 @@ export class Recorder {
 				shaderType = getShaderParameter.apply(context, [webGLShader, SHADER_TYPE]);
 			}
 
-			shader = { name: this.#getShaderName(), type: shaderType, contextType, context };
+			shader = { name: this.#getShaderName(), type: shaderType, contextType, context, deleted: false, } as ShaderRecord;
 			this.#addShader(webGLShader, shader);
 		}
 
@@ -118,6 +133,16 @@ export class Recorder {
 	#addShader(webGLShader: WebGLShader, shader: ShaderRecord): void {
 		this.#shaders.set(webGLShader, shader);
 		this.#shadersByName.set(shader.name, webGLShader);
+	}
+
+	#deleteShader(webGLShader: WebGLShader): ShaderRecord | null {
+		const shader = this.#shaders.get(webGLShader);
+		if (!shader) {
+			return null;
+		}
+		this.#shaders.delete(webGLShader);
+		this.#shadersByName.delete(shader.name);
+		return shader;
 	}
 
 	#getProgram(webGLProgram: WebGLProgram): ProgramRecord {

@@ -256,7 +256,6 @@ export class Application {
 
 		const canvas = createElement('canvas') as HTMLCanvasElement;
 		const webGLAnyContext = this.#originalHTMLCanvasElementGetContext.call(canvas, contextId);
-		console.info(webGLAnyContext);
 
 		if (!webGLAnyContext) {
 			console.error(`Unable to create a ${contextId} context`);

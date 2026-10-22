@@ -61,6 +61,12 @@ export class ShaderEditor implements ViewComponent {
 			this.#shaders.set(event.detail.name, event.detail);
 			this.#reloadShaderList();
 		});
+		/*
+		Controller.addEventListener('shaderdeleted', (event) => {
+			this.#shaders.delete(event.detail.name);
+			this.#reloadShaderList();
+		});
+		*/
 
 
 		void this.#initEditor(editorContainer);
@@ -85,6 +91,7 @@ export class ShaderEditor implements ViewComponent {
 			this.#recompileTimeout = setTimeout(() => { this.recompile() }, this.#recompileDelay);//TODO:
 		});
 		*/
+		this.#reloadShaderList();
 
 	}
 
@@ -113,23 +120,21 @@ export class ShaderEditor implements ViewComponent {
 	}
 
 	#selectShader(name: string): void {
+		if (!this.#shaderEditor) {
+			return;
+		}
+
 		if (name === this.#selectedShader) {
 			return;
 		}
 
 		this.#selectedShader = name;
 
-		console.debug('shader selected', name);
 		const shader = this.#shaders.get(name);
 		if (!shader) {
 			return;
 		}
 		//this.#htmlShaderSource.value = shader.source ?? '';
-
-		if (!this.#shaderEditor) {
-			return;
-		}
-
 		const editSession = this.#getSession(name);
 		/*
 		if (this.#htmlShaderNameSelect) {
