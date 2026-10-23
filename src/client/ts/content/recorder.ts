@@ -31,7 +31,7 @@ type UniformValue = {
 }
 
 export class Recorder {
-	#recording = true;
+	#recording = false;
 	#currentId = 0;
 	#currentShaderId = 0;
 	#lastRequestAnimationFrame = -1;
@@ -42,7 +42,7 @@ export class Recorder {
 	/** Uniform locations known to the site */
 	readonly #siteUniformLocation = new Map2<WebGLProgram, string, WebGLUniformLocation>();
 	/** Map the old uniform location to the new one */
-	readonly #uniformLocations = new Map<WebGLUniformLocation, WebGLUniformLocation>();
+	readonly #uniformLocations = new Map<WebGLUniformLocation, WebGLUniformLocation | null>();
 	readonly #uniformValues = new Map<WebGLUniformLocation, UniformValue>();
 
 	constructor() {
@@ -182,6 +182,12 @@ export class Recorder {
 				{
 					const oldLocation = args[0];
 					const newLocation = this.#uniformLocations.get(oldLocation);
+
+					if (newLocation === null) {
+						// The new location is null, meaning the uniform doesn't exist anymore
+						break;
+					}
+
 					if (newLocation) {
 						args[0] = newLocation;
 					}
@@ -350,6 +356,8 @@ export class Recorder {
 			for (const [name, oldUniform] of programUniforms) {
 				const newUniform = newUniforms.get(name);
 				if (!newUniform) {
+					// Set the location to null, which will discard calls to uniform[1234][fi][v]
+					this.#uniformLocations.set(oldUniform, null);
 					continue;
 				}
 
