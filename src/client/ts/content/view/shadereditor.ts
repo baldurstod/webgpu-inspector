@@ -14,6 +14,7 @@ export class ShaderEditor implements ViewComponent {
 	#shadowRoot?: ShadowRoot;
 	#htmlShaderSelect: HTMLSelectElement;
 	#htmlRecompile: HTMLButtonElement;
+	#htmlIdentify: HTMLButtonElement;
 	//#htmlShaderSource: HTMLTextAreaElement;
 	#shaders = new Map<string, ShaderRecord>()
 	#selectedShader?: string;
@@ -51,6 +52,14 @@ export class ShaderEditor implements ViewComponent {
 				this.#htmlRecompile = createElement('button', {
 					i18n: '#recompile',
 					$click: () => this.#recompileShader(),
+				}) as HTMLButtonElement,
+				this.#htmlIdentify = createElement('button', {
+					i18n: '#identify',
+					$click: () => this.#identifyShader(),
+				}) as HTMLButtonElement,
+				createElement('button', {
+					i18n: '#reset',
+					$click: () => this.#resetShader(),
 				}) as HTMLButtonElement,
 				editorContainer = createElement('div', { style: 'flex:1;' }),
 			],
@@ -183,6 +192,32 @@ export class ShaderEditor implements ViewComponent {
 			detail: {
 				name: this.#htmlShaderSelect.value,
 				source: shaderSource,
+			}
+		})
+	}
+
+	#identifyShader(): void {
+		const shaderSource = this.#shaderEditor?.getValue();
+		if (shaderSource === undefined) {
+			return;
+		}
+
+		Controller.dispatchEvent('identifyshader', {
+			detail: {
+				name: this.#htmlShaderSelect.value,
+			}
+		})
+	}
+
+	#resetShader(): void {
+		const shaderSource = this.#shaderEditor?.getValue();
+		if (shaderSource === undefined) {
+			return;
+		}
+
+		Controller.dispatchEvent('resetshader', {
+			detail: {
+				name: this.#htmlShaderSelect.value,
 			}
 		})
 	}

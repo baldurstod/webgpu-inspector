@@ -1,5 +1,6 @@
 import { Map2 } from 'harmony-utils';
-import { Controller, RecompileShader } from './controller';
+import { EXTENSION_NAME } from './constants';
+import { Controller, IdentifyShader, RecompileShader } from './controller';
 import { getMethod } from './methods';
 import { ContextType, Record } from './record';
 
@@ -30,6 +31,24 @@ type UniformValue = {
 	value: any[];
 }
 
+const identify_shader_webgl1 = `#version 300 es
+precision mediump float;
+precision mediump int;
+void main() {
+	gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+}
+`;
+
+const identify_shader_webgl2 = `#version 300 es
+
+precision mediump float;
+precision mediump int;
+out vec4 fragColor;
+void main() {
+	fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+}
+`;
+
 export class Recorder {
 	#recording = false;
 	#currentId = 0;
@@ -44,9 +63,12 @@ export class Recorder {
 	/** Map the old uniform location to the new one */
 	readonly #uniformLocations = new Map<WebGLUniformLocation, WebGLUniformLocation | null>();
 	readonly #uniformValues = new Map<WebGLUniformLocation, UniformValue>();
+	readonly #lastProgramUsage = new Map<WebGLProgram, DOMHighResTimeStamp>();
 
 	constructor() {
 		Controller.addEventListener('recompileshader', (event) => this.#recompileShader(event.detail));
+		Controller.addEventListener('identifyshader', (event) => this.#identifyShader(event.detail));
+		Controller.addEventListener('resetshader', (event) => this.#resetShader(event.detail));
 	}
 
 	setRecording(recording: boolean): void {
@@ -102,6 +124,13 @@ export class Recorder {
 					this.#programs.set(program, { program, contextType, context, } as ProgramRecord);
 					//console.debug(`A ${contextType} program was created`, result, args[0]);
 					return program;
+				}
+				break;
+			case 'useProgram':
+				{
+					func.apply(context, args);
+					const program = args[0] as WebGLProgram;
+					this.#lastProgramUsage.set(program, performance.now());
 				}
 				break;
 			case 'attachShader':
@@ -318,7 +347,13 @@ export class Recorder {
 		const compileStatus = getShaderParameter.apply(shader.context, [webGLShader, shader.context.COMPILE_STATUS]);
 		//console.debug('compileShader result', compileStatus);
 		if (!compileStatus) {
-			console.error('Failed to compile shader', shader);
+			const getShaderInfoLog = getMethod(shader.contextType, 'getShaderInfoLog');
+			if (!getShaderInfoLog) {
+				console.error(`${EXTENSION_NAME} failed to compile shader ${name} for an unknown reason`);
+			} else {
+				const shaderInfoLog = getShaderInfoLog.apply(shader.context, [webGLShader]);
+				console.error(`${EXTENSION_NAME} failed to compile shader ${name}: ${shaderInfoLog}`);
+			}
 			return;
 		}
 
@@ -334,6 +369,13 @@ export class Recorder {
 			linkProgram.apply(shader.context, [program]);
 			const linkStatus = getProgramParameter.apply(shader.context, [program, shader.context.LINK_STATUS]);
 			if (!linkStatus) {
+				const getProgramInfoLog = getMethod(shader.contextType, 'getProgramInfoLog');
+				if (!getProgramInfoLog) {
+					console.error(`${EXTENSION_NAME} failed to link program for an unknown reason`);
+				} else {
+					const programInfoLog = getProgramInfoLog.apply(shader.context, [program]);
+					console.error(`${EXTENSION_NAME} failed to link program: ${programInfoLog}`);
+				}
 				continue;
 			}
 
@@ -381,6 +423,61 @@ export class Recorder {
 		if (currentProgram) {
 			useProgram.apply(shader.context, [currentProgram]);
 		}
+	}
+
+	#identifyShader({ name }: IdentifyShader): void {
+		console.info('identifyShader', name);
+		const webGLShader = this.#shadersByName.get(name);
+		if (!webGLShader) {
+			console.error(`${EXTENSION_NAME} can't identify shader ${name}: shader not found`);
+			return;
+		}
+
+		// Look for every program containg the shader
+		// We may have to recompile several fragment shaders if a single vertex shader is attached to several fragment shaders
+		const recompileFragments = new Map<string, ContextType>();
+		for (const [program, programRecord] of this.#programs) {
+			if (programRecord.vertex === webGLShader) {
+				// If we identify the vertex shader, search for the corresponding fragment
+				const fragmentShader = this.#shaders.get(programRecord.fragment!);
+				if (fragmentShader) {
+					recompileFragments.set(fragmentShader.name, fragmentShader.contextType);
+				}
+			} else if (programRecord.fragment === webGLShader) {
+				// We a
+				recompileFragments.set(name, programRecord.contextType);
+			}
+		}
+
+		// Recompile all
+		for (const [name, contextType] of recompileFragments) {
+			if (contextType == 'webgl') {
+				this.#recompileShader({ name, source: identify_shader_webgl1 });
+			} else if (contextType == 'webgl2') {
+				this.#recompileShader({ name, source: identify_shader_webgl2 });
+			}
+		}
+	}
+
+	#resetShader({ name }: IdentifyShader): void {
+		const webGLShader = this.#shadersByName.get(name);
+		if (!webGLShader) {
+			console.error(`${EXTENSION_NAME} can't reset shader ${name}: shader not found`);
+			return;
+		}
+
+		const shader = this.#shaders.get(webGLShader);
+		if (!shader) {
+			console.error(`${EXTENSION_NAME} can't reset shader ${name}: shader not found`);
+			return;
+		}
+
+		if (shader.source === undefined) {
+			console.error(`${EXTENSION_NAME} can't reset shader ${name}: shader source no set`);
+			return;
+		}
+
+		this.#recompileShader({ name, source: shader.source });
 	}
 }
 

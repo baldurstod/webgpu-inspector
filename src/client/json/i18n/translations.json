@@ -12,6 +12,8 @@
 		"#records",
 		"#recompile",
 		"#record",
+		"#reset",
+		"#identify",
 		""
 	]
 }
