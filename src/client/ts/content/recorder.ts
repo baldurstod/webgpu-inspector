@@ -460,6 +460,7 @@ export class Recorder {
 	}
 
 	#resetShader({ name }: IdentifyShader): void {
+		console.info('resetShader', name);
 		const webGLShader = this.#shadersByName.get(name);
 		if (!webGLShader) {
 			console.error(`${EXTENSION_NAME} can't reset shader ${name}: shader not found`);

@@ -9,3 +9,24 @@
 	height: 100%;
 
 }
+
+.select-container {
+	display: flex;
+}
+
+.select-container>select {
+	flex: 1;
+}
+
+.identify-shader {
+	flex: 0 0 auto;
+	padding: 0 0.5rem;
+}
+.identify-shader {
+	flex: 0 0 auto;
+	padding: 0 0.5rem;
+}
+
+.identify-shader.on {
+	color: green;
+}

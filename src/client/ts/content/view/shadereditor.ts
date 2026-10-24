@@ -1,7 +1,9 @@
 import { Ace } from 'ace-builds';
 import { loadScript } from 'harmony-browser-utils';
-import { createElement, I18n, shadowRootStyle } from 'harmony-ui';
+import { mysterySVG } from 'harmony-svg';
+import { createElement, defineHarmonyToggleButton, HTMLHarmonyToggleButtonElement, I18n, shadowRootStyle } from 'harmony-ui';
 import shaderEditorCSS from '../../../css/shadereditor.css';
+import { SUFFIX } from '../constants';
 import { Controller } from '../controller';
 import { getRuntimeURL } from '../messages';
 import { getShaderType, ShaderRecord } from '../recorder';
@@ -14,49 +16,66 @@ export class ShaderEditor implements ViewComponent {
 	#shadowRoot?: ShadowRoot;
 	#htmlShaderSelect: HTMLSelectElement;
 	#htmlRecompile: HTMLButtonElement;
-	#htmlIdentify: HTMLButtonElement;
+	#htmlIdentify: HTMLHarmonyToggleButtonElement;
 	//#htmlShaderSource: HTMLTextAreaElement;
 	#shaders = new Map<string, ShaderRecord>()
 	#selectedShader?: string;
 	#shaderEditor?: Ace.Editor;
 	#sessions = new Map<string, Ace.EditSession>;
+	#identify = false;
+	#identifiedShader: string | null = null;
 
 	constructor() {
 		this.#shadowRoot = this.htmlElement.attachShadow({ mode: 'closed' });
 		I18n.observeElement(this.#shadowRoot);
 		void shadowRootStyle(this.#shadowRoot, shaderEditorCSS);
 
+		defineHarmonyToggleButton(SUFFIX);
+
 		let editorContainer;
 		createElement('div', {
 			class: 'editor',
 			parent: this.#shadowRoot,
 			childs: [
-				this.#htmlShaderSelect = createElement('select', {
-					$input: (event: Event) => {
-						this.#selectShader((event.target as HTMLSelectElement).value);
-						//const selectedOption = (event.target as HTMLSelectElement).selectedOptions[0];
-						//if (selectedOption) {
-						/*
-						if (selectedOption) {
-							if (selectedOption.getAttribute('data-shader')) {
-								this.setEditorShaderName((event.target as HTMLSelectElement).value);
+				createElement('div', {
+					class: 'select-container',
+					childs: [
+						this.#htmlShaderSelect = createElement('select', {
+							$input: (event: Event) => {
+								this.#selectShader((event.target as HTMLSelectElement).value);
 							}
-							if (selectedOption.getAttribute('data-include')) {
-								this.setEditorIncludeName((event.target as HTMLSelectElement).value);
-							}
-						}
-						*/
-					}
-				}) as HTMLSelectElement,
+						}) as HTMLSelectElement,
+						this.#htmlIdentify = createElement('harmony-toggle-button' + SUFFIX, {
+							class: 'identify-shader',
+							disabled: true,
+							state: false,
+							'data-i18n': '#identify_shader',
+							childs: [
+								createElement('div', {
+									slot: 'off',
+									innerHTML: mysterySVG,
+								}),
+								createElement('div', {
+									slot: 'on',
+									class: 'recording-on',
+									innerHTML: mysterySVG,
+								}),
+							],
+							$change: (event: Event) => this.#identifyShader((event.target as HTMLHarmonyToggleButtonElement).state),
+						}) as HTMLHarmonyToggleButtonElement,
+					],
+				}),
 				//this.#htmlShaderSource = createElement('textarea') as HTMLTextAreaElement,
 				this.#htmlRecompile = createElement('button', {
 					i18n: '#recompile',
 					$click: () => this.#recompileShader(),
 				}) as HTMLButtonElement,
+				/*
 				this.#htmlIdentify = createElement('button', {
 					i18n: '#identify',
 					$click: () => this.#identifyShader(),
 				}) as HTMLButtonElement,
+				*/
 				createElement('button', {
 					i18n: '#reset',
 					$click: () => this.#resetShader(),
@@ -123,8 +142,13 @@ export class ShaderEditor implements ViewComponent {
 			*/
 		}
 
+		//display(this.#htmlIdentify, this.#shaders.size > 0);
+		this.#htmlIdentify.disabled = this.#shaders.size == 0;
+
 		if (!this.#selectedShader) {
 			this.#selectShader(this.#htmlShaderSelect.value);
+		} else {
+			this.#htmlShaderSelect.value = this.#selectedShader;
 		}
 	}
 
@@ -143,24 +167,15 @@ export class ShaderEditor implements ViewComponent {
 		if (!shader) {
 			return;
 		}
-		//this.#htmlShaderSource.value = shader.source ?? '';
+
 		const editSession = this.#getSession(name);
-		/*
-		if (this.#htmlShaderNameSelect) {
-			this.#htmlShaderNameSelect.value = shaderName;
-		}
-			*/
 
 		this.#shaderEditor.setSession(editSession);
 
-		//this.#shaderType = source.getType();
-		//this.#editMode = EDIT_MODE_SHADER;
-		//const code = source.getSource();
-		//this.#shaderEditor.setValue(code);
 		editSession.doc.setValue(shader.source ?? '');
-		//ShaderManager.setCustomSource(this.#shaderType, this.#editorShaderName, code);
 
-		//this.#setAnnotations(this.#editorShaderName);
+		// Change the shader identification
+		this.#identifyShader(this.#identify);
 	}
 
 	#getSession(name: string): Ace.EditSession {
@@ -193,20 +208,31 @@ export class ShaderEditor implements ViewComponent {
 				name: this.#htmlShaderSelect.value,
 				source: shaderSource,
 			}
-		})
+		});
 	}
 
-	#identifyShader(): void {
-		const shaderSource = this.#shaderEditor?.getValue();
-		if (shaderSource === undefined) {
-			return;
+	#identifyShader(identify: boolean): void {
+		this.#identify = identify;
+
+		// Reset the previously identified shader
+		if (this.#identifiedShader) {
+			Controller.dispatchEvent('resetshader', {
+				detail: {
+					name: this.#identifiedShader,
+				}
+			});
 		}
 
-		Controller.dispatchEvent('identifyshader', {
-			detail: {
-				name: this.#htmlShaderSelect.value,
-			}
-		})
+		if (identify) {
+			this.#identifiedShader = this.#htmlShaderSelect.value;
+			Controller.dispatchEvent('identifyshader', {
+				detail: {
+					name: this.#identifiedShader,
+				}
+			});
+		} else {
+			this.#identifiedShader = null;
+		}
 	}
 
 	#resetShader(): void {
@@ -219,6 +245,6 @@ export class ShaderEditor implements ViewComponent {
 			detail: {
 				name: this.#htmlShaderSelect.value,
 			}
-		})
+		});
 	}
 }

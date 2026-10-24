@@ -4,14 +4,13 @@ import { Map2 } from 'harmony-utils';
 import marketHistoryCSS from '../../css/content.css';
 import english from '../../json/i18n/english.json';
 import french from '../../json/i18n/french.json';
+import { SUFFIX } from './constants';
 import { addMethod } from './methods';
 import { readyPromise } from './ready';
 import { ContextType } from './record';
 import { Recorder } from './recorder';
 import { RecorderView } from './view/recorderview';
 import { ShaderEditor } from './view/shadereditor';
-
-const SUFFIX = '-webgpu-inspector';
 
 export class Application {
 	#allowed: { webgl: boolean, webgl2: boolean, webgpu: boolean } = { webgl: true, webgl2: true, webgpu: true };
@@ -301,7 +300,7 @@ export class Application {
 				const start = performance.now();
 				//const result = propertyValue.apply(this, args);
 				const end = performance.now();
-				const result =that.#recorder.addRecord(contextId, this, propertyName, propertyValue, args);
+				const result = that.#recorder.addRecord(contextId, this, propertyName, propertyValue, args);
 
 				return result;
 			};

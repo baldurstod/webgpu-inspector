@@ -1,9 +1,16 @@
 {
 	"lang": "french",
 	"strings": {
+		"#enable_all": "Tout activer",
 		"#enable_webgl": "Activer WebGL",
 		"#enable_webgl2": "Activer WebGL2",
 		"#enable_webgpu": "Activer WebGPU",
+		"#shaders": "Shaders",
+		"#records": "Enregistrements",
+		"#recompile": "Recompiler",
+		"#record": "Enregistrer",
+		"#reset": "réinitialiser",
+		"#identify_shader": "Identifier le shader",
 		"": ""
 	}
 }

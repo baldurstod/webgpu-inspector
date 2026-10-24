@@ -1,9 +1,16 @@
 {
 	"lang": "english",
 	"strings": {
+		"#enable_all": "Enable all",
 		"#enable_webgl": "Enable WebGL",
 		"#enable_webgl2": "Enable WebGL2",
 		"#enable_webgpu": "Enable WebGPU",
+		"#shaders": "Shaders",
+		"#records": "Records",
+		"#recompile": "Recompile",
+		"#record": "Record",
+		"#reset": "Reset",
+		"#identify_shader": "Identify shader",
 		"": ""
 	}
 }

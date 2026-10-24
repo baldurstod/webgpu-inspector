@@ -13,7 +13,7 @@
 		"#recompile",
 		"#record",
 		"#reset",
-		"#identify",
+		"#identify_shader",
 		""
 	]
 }
