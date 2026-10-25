@@ -59,7 +59,7 @@ export class Recorder {
 	readonly #shadersByName = new Map<string, WebGLShader>();
 	readonly #programs = new Map<WebGLProgram, ProgramRecord>();
 	/** Uniform locations known to the site */
-	readonly #siteUniformLocation = new Map2<WebGLProgram, string, WebGLUniformLocation>();
+	readonly #siteUniformLocation = new Map2<WebGLProgram, string, WebGLUniformLocation | null>();
 	/** Map the old uniform location to the new one */
 	readonly #uniformLocations = new Map<WebGLUniformLocation, WebGLUniformLocation | null>();
 	readonly #uniformValues = new Map<WebGLUniformLocation, UniformValue>();
@@ -163,7 +163,6 @@ export class Recorder {
 					const shader = this.#getShader(contextType, context, args[0]);
 					// Store the source
 					shader.source = args[1];
-					//console.debug(`A ${contextType} ${getShaderType(shader.type)} source was set`, args[0], args[1]);
 
 					Controller.dispatchEvent('shadersource', { detail: shader });
 				}
@@ -171,7 +170,6 @@ export class Recorder {
 			case 'linkProgram':
 				{
 					func.apply(context, args);
-					const program = this.#getProgram(contextType, context, args[0]);
 				}
 				break;
 			case 'getUniformLocation':
@@ -183,9 +181,8 @@ export class Recorder {
 					const program = args[0] as WebGLProgram;
 					const name = args[1] as string;
 
-					if (uniformLocation) {
-						this.#siteUniformLocation.set(program, name, uniformLocation);
-					}
+					this.#siteUniformLocation.set(program, name, uniformLocation);
+
 					return uniformLocation;
 				}
 				break;
@@ -362,20 +359,21 @@ export class Recorder {
 		// Store the current program
 		const currentProgram = getParameter.apply(shader.context, [shader.context.CURRENT_PROGRAM]) as WebGLProgram | null;
 
-		// Link all programs
-		// TODO: only link program(s) using the involved shader
-		for (const [program] of this.#programs) {
-			const programRecord = this.#getProgram(shader.contextType, shader.context, program);
+		// Link the program(s) the shader is attached to
+		for (const [program, programRecord] of this.#programs) {
+			if (programRecord.vertex !== webGLShader && programRecord.fragment !== webGLShader) {
+				continue;
+			}
 
 			// Link the program
-			linkProgram.apply(shader.context, [program]);
-			const linkStatus = getProgramParameter.apply(shader.context, [program, shader.context.LINK_STATUS]);
+			linkProgram.apply(programRecord.context, [program]);
+			const linkStatus = getProgramParameter.apply(programRecord.context, [program, programRecord.context.LINK_STATUS]);
 			if (!linkStatus) {
-				const getProgramInfoLog = getMethod(shader.contextType, 'getProgramInfoLog');
+				const getProgramInfoLog = getMethod(programRecord.contextType, 'getProgramInfoLog');
 				if (!getProgramInfoLog) {
 					console.error(`${EXTENSION_NAME} failed to link program for an unknown reason`);
 				} else {
-					const programInfoLog = getProgramInfoLog.apply(shader.context, [program]);
+					const programInfoLog = getProgramInfoLog.apply(programRecord.context, [program]);
 					console.error(`${EXTENSION_NAME} failed to link program: ${programInfoLog}`);
 				}
 				continue;
@@ -384,6 +382,7 @@ export class Recorder {
 			// Get the new uniforms
 			const newUniforms = this.#getProgramUniforms(programRecord);
 			if (!newUniforms) {
+				console.error(`${EXTENSION_NAME} failed to get program uniforms after linking `, programRecord);
 				continue;
 			}
 			//console.debug('New program uniforms', newUniforms, programRecord);
@@ -391,13 +390,18 @@ export class Recorder {
 			// Map the old uniforms to the new uniforms
 			const programUniforms = this.#siteUniformLocation.getSubMap(program);
 			if (!programUniforms) {
+				console.error(`${EXTENSION_NAME} failed to get site knonw uniforms after linking `, programRecord);
 				continue;
 			}
 
 			// Use the linked program
-			useProgram.apply(shader.context, [program]);
+			useProgram.apply(programRecord.context, [program]);
 
+			// Restore the uniform values. linkProgram set the uniforms to 0
 			for (const [name, oldUniform] of programUniforms) {
+				if (oldUniform === null) {
+					continue;
+				}
 				const newUniform = newUniforms.get(name);
 				if (!newUniform) {
 					// Set the location to null, which will discard calls to uniform[1234][fi][v]
@@ -409,7 +413,7 @@ export class Recorder {
 
 				// Set the new value, the site may not update the value by itself
 				const value = this.#uniformValues.get(oldUniform);
-				if (!value) {
+				if (value === undefined) {
 					continue;
 				}
 
