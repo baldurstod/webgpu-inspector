@@ -31,7 +31,7 @@ type UniformValue = {
 	value: any[];
 }
 
-const identify_shader_webgl1 = `#version 300 es
+const identify_shader_glsl_v1 = `
 precision mediump float;
 precision mediump int;
 void main() {
@@ -39,7 +39,7 @@ void main() {
 }
 `;
 
-const identify_shader_webgl2 = `#version 300 es
+const identify_shader_glsl_v3 = `#version 300 es
 
 precision mediump float;
 precision mediump int;
@@ -435,27 +435,53 @@ export class Recorder {
 
 		// Look for every program containg the shader
 		// We may have to recompile several fragment shaders if a single vertex shader is attached to several fragment shaders
-		const recompileFragments = new Map<string, ContextType>();
+		const recompileFragments = new Map<string, string>();
+		const regex = /^#version\s*(\d*)\s*(.*)\s*$/;
 		for (const [program, programRecord] of this.#programs) {
+
+			let fragmentName = '';
 			if (programRecord.vertex === webGLShader) {
 				// If we identify the vertex shader, search for the corresponding fragment
 				const fragmentShader = this.#shaders.get(programRecord.fragment!);
 				if (fragmentShader) {
-					recompileFragments.set(fragmentShader.name, fragmentShader.contextType);
+					fragmentName = fragmentShader.name
+					//recompileFragments.set(fragmentShader.name, fragmentShader.contextType);
 				}
 			} else if (programRecord.fragment === webGLShader) {
-				// We a
-				recompileFragments.set(name, programRecord.contextType);
+				fragmentName = name;
 			}
+
+			if (fragmentName === '') {
+				continue;
+			}
+
+			recompileFragments.set(fragmentName, identify_shader_glsl_v1);
+
+			// In case of a webgl2 context, look for the vertex shader version, our injected fragment shader must match
+			const vertexShader = this.#shaders.get(programRecord.vertex!);
+			if (programRecord.contextType === 'webgl2' && vertexShader && vertexShader.source) {
+				const lines = vertexShader.source.split('\n');
+
+				if (lines.length === 0) {
+					continue;
+				}
+
+				if (lines[0] === '#version 300 es') {
+					recompileFragments.set(fragmentName, identify_shader_glsl_v3);
+				}
+			}
+
 		}
 
 		// Recompile all
-		for (const [name, contextType] of recompileFragments) {
+		for (const [name, source] of recompileFragments) {
+			this.#recompileShader({ name, source });
+			/*
 			if (contextType == 'webgl') {
-				this.#recompileShader({ name, source: identify_shader_webgl1 });
 			} else if (contextType == 'webgl2') {
 				this.#recompileShader({ name, source: identify_shader_webgl2 });
 			}
+			*/
 		}
 	}
 
