@@ -245,20 +245,22 @@ export class Recorder {
 		}
 
 		const activeUniforms: GLint = getProgramParameter.apply(program.context, [program.program, program.context.ACTIVE_UNIFORMS]);
-		//console.log('Link program activeUniforms', activeUniforms);
 		const result = new Map<string, WebGLUniformLocation>();
 		for (let i = 0; i < activeUniforms; i++) {
 			const uniformInfo = getActiveUniform.apply(program.context, [program.program, i]) as WebGLActiveInfo | null;
 			if (!uniformInfo) {
+				console.error(`${EXTENSION_NAME} getActiveUniform returned null for uniform ${i}`, program);
 				continue;
 			}
-			const uniformLocation = getUniformLocation.apply(program.context, [program.program, uniformInfo.name]) as WebGLUniformLocation | null;
 
-			if (uniformLocation) {
+			const uniformLocation = getUniformLocation.apply(program.context, [program.program, uniformInfo.name]) as WebGLUniformLocation | null;
+			if (!uniformLocation) {
 				//program.uniforms.set(attribInfo.name, uniformLocation);
-				result.set(uniformInfo.name, uniformLocation);
+				console.error(`${EXTENSION_NAME} getUniformLocation returned null for uniform ${uniformInfo.name}`, program);
+				continue;
 			}
 
+			result.set(uniformInfo.name.replace('[0]', ''), uniformLocation);
 		}
 		return result;
 	}
