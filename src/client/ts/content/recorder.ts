@@ -2,7 +2,7 @@ import { createElement } from 'harmony-ui';
 import { Map2 } from 'harmony-utils';
 import { EXTENSION_NAME } from './constants';
 import { Controller, IdentifyShader, RecompileShader } from './controller';
-import { getMethod } from './methods';
+import { getOriginalMethod } from './methods';
 import { readyPromise } from './ready';
 import { ContextType, Record } from './record';
 import renderTextureFragment from './shaders/rendertexture_fragment.glsl';
@@ -281,24 +281,24 @@ export class Recorder {
 		}
 		const subContext = c.context;
 
-		const createProgram = getMethod(contextType, 'createProgram');
-		const createShader = getMethod(contextType, 'createShader');
-		const shaderSource = getMethod(contextType, 'shaderSource');
-		const compileShader = getMethod(contextType, 'compileShader');
-		const getShaderParameter = getMethod(contextType, 'getShaderParameter');
-		const linkProgram = getMethod(contextType, 'linkProgram');
-		const attachShader = getMethod(contextType, 'attachShader');
-		const getProgramParameter = getMethod(contextType, 'getProgramParameter');
-		const drawElements = getMethod(contextType, 'drawElements');
-		const useProgram = getMethod(contextType, 'useProgram');
-		const getUniformLocation = getMethod(contextType, 'getUniformLocation');
-		const uniform1i = getMethod(contextType, 'uniform1i');
-		const activeTexture = getMethod(contextType, 'activeTexture');
-		const bindTexture = getMethod(contextType, 'bindTexture');
-		const compressedTexImage2D = getMethod(contextType, 'compressedTexImage2D');
-		const createTexture = getMethod(contextType, 'createTexture');
-		const texParameteri = getMethod(contextType, 'texParameteri');
-		const getExtension = getMethod(contextType, 'getExtension');
+		const createProgram = getOriginalMethod(contextType, 'createProgram');
+		const createShader = getOriginalMethod(contextType, 'createShader');
+		const shaderSource = getOriginalMethod(contextType, 'shaderSource');
+		const compileShader = getOriginalMethod(contextType, 'compileShader');
+		const getShaderParameter = getOriginalMethod(contextType, 'getShaderParameter');
+		const linkProgram = getOriginalMethod(contextType, 'linkProgram');
+		const attachShader = getOriginalMethod(contextType, 'attachShader');
+		const getProgramParameter = getOriginalMethod(contextType, 'getProgramParameter');
+		const drawElements = getOriginalMethod(contextType, 'drawElements');
+		const useProgram = getOriginalMethod(contextType, 'useProgram');
+		const getUniformLocation = getOriginalMethod(contextType, 'getUniformLocation');
+		const uniform1i = getOriginalMethod(contextType, 'uniform1i');
+		const activeTexture = getOriginalMethod(contextType, 'activeTexture');
+		const bindTexture = getOriginalMethod(contextType, 'bindTexture');
+		const compressedTexImage2D = getOriginalMethod(contextType, 'compressedTexImage2D');
+		const createTexture = getOriginalMethod(contextType, 'createTexture');
+		const texParameteri = getOriginalMethod(contextType, 'texParameteri');
+		const getExtension = getOriginalMethod(contextType, 'getExtension');
 		if (!createProgram || !createShader || !shaderSource || !compileShader || !getShaderParameter
 			|| !linkProgram || !attachShader || !getProgramParameter || !drawElements || !useProgram || !getUniformLocation
 			|| !uniform1i || !activeTexture || !bindTexture || !compressedTexImage2D || !createTexture || !texParameteri || !getExtension
@@ -416,7 +416,7 @@ export class Recorder {
 
 		this.#htmlCanvasContainer?.append(canvas);
 
-		const getContext = getMethod('canvas2d', 'getContext');
+		const getContext = getOriginalMethod('canvas2d', 'getContext');
 		if (!getContext) {
 			return null;
 		}
@@ -453,7 +453,7 @@ export class Recorder {
 			let shaderType = -1;
 
 			// Get the shader type
-			const getShaderParameter = getMethod(contextType, 'getShaderParameter');
+			const getShaderParameter = getOriginalMethod(contextType, 'getShaderParameter');
 			if (getShaderParameter) {
 				shaderType = getShaderParameter.apply(context, [webGLShader, SHADER_TYPE]);
 			}
@@ -512,13 +512,13 @@ export class Recorder {
 		}
 
 		// Get all original methods
-		const shaderSource = getMethod(shader.contextType, 'shaderSource');
-		const compileShader = getMethod(shader.contextType, 'compileShader');
-		const getShaderParameter = getMethod(shader.contextType, 'getShaderParameter');
-		const linkProgram = getMethod(shader.contextType, 'linkProgram');
-		const getProgramParameter = getMethod(shader.contextType, 'getProgramParameter');
-		const getParameter = getMethod(shader.contextType, 'getParameter');
-		const useProgram = getMethod(shader.contextType, 'useProgram');
+		const shaderSource = getOriginalMethod(shader.contextType, 'shaderSource');
+		const compileShader = getOriginalMethod(shader.contextType, 'compileShader');
+		const getShaderParameter = getOriginalMethod(shader.contextType, 'getShaderParameter');
+		const linkProgram = getOriginalMethod(shader.contextType, 'linkProgram');
+		const getProgramParameter = getOriginalMethod(shader.contextType, 'getProgramParameter');
+		const getParameter = getOriginalMethod(shader.contextType, 'getParameter');
+		const useProgram = getOriginalMethod(shader.contextType, 'useProgram');
 		if (!shaderSource || !compileShader || !getShaderParameter || !linkProgram || !getProgramParameter || !getParameter || !useProgram) {
 			return;
 		}
@@ -529,7 +529,7 @@ export class Recorder {
 		const compileStatus = getShaderParameter.apply(shader.context, [webGLShader, shader.context.COMPILE_STATUS]);
 		//console.debug('compileShader result', compileStatus);
 		if (!compileStatus) {
-			const getShaderInfoLog = getMethod(shader.contextType, 'getShaderInfoLog');
+			const getShaderInfoLog = getOriginalMethod(shader.contextType, 'getShaderInfoLog');
 			if (!getShaderInfoLog) {
 				console.error(`${EXTENSION_NAME} failed to compile shader ${name} for an unknown reason`);
 			} else {
@@ -552,7 +552,7 @@ export class Recorder {
 			linkProgram.apply(programRecord.context, [program]);
 			const linkStatus = getProgramParameter.apply(programRecord.context, [program, programRecord.context.LINK_STATUS]);
 			if (!linkStatus) {
-				const getProgramInfoLog = getMethod(programRecord.contextType, 'getProgramInfoLog');
+				const getProgramInfoLog = getOriginalMethod(programRecord.contextType, 'getProgramInfoLog');
 				if (!getProgramInfoLog) {
 					console.error(`${EXTENSION_NAME} failed to link program for an unknown reason`);
 				} else {
@@ -600,7 +600,7 @@ export class Recorder {
 					continue;
 				}
 
-				const uniformSetter = getMethod(shader.contextType, value.method);
+				const uniformSetter = getOriginalMethod(shader.contextType, value.method);
 				if (uniformSetter) {
 					value.value[0] = newUniform;
 					uniformSetter.apply(shader.context, value.value);
@@ -709,14 +709,14 @@ export function getShaderType(type: GLenum): 'vertex' | 'fragment' | 'unknown' {
 }
 
 function setupVertexAttributes(contextType: ContextType, context: WebGLAnyRenderingContext, program: WebGLProgram, geometryAttributes: WebGLAttributes): boolean {
-	const getProgramParameter = getMethod(contextType, 'getProgramParameter');
-	const getActiveAttrib = getMethod(contextType, 'getActiveAttrib');
-	const getAttribLocation = getMethod(contextType, 'getAttribLocation');
-	const createBuffer = getMethod(contextType, 'createBuffer');
-	const bindBuffer = getMethod(contextType, 'bindBuffer');
-	const bufferData = getMethod(contextType, 'bufferData');
-	const enableVertexAttribArray = getMethod(contextType, 'enableVertexAttribArray');
-	const vertexAttribPointer = getMethod(contextType, 'vertexAttribPointer');
+	const getProgramParameter = getOriginalMethod(contextType, 'getProgramParameter');
+	const getActiveAttrib = getOriginalMethod(contextType, 'getActiveAttrib');
+	const getAttribLocation = getOriginalMethod(contextType, 'getAttribLocation');
+	const createBuffer = getOriginalMethod(contextType, 'createBuffer');
+	const bindBuffer = getOriginalMethod(contextType, 'bindBuffer');
+	const bufferData = getOriginalMethod(contextType, 'bufferData');
+	const enableVertexAttribArray = getOriginalMethod(contextType, 'enableVertexAttribArray');
+	const vertexAttribPointer = getOriginalMethod(contextType, 'vertexAttribPointer');
 	if (!getProgramParameter || !getActiveAttrib || !getAttribLocation || !createBuffer || !bindBuffer || !bufferData || !enableVertexAttribArray || !vertexAttribPointer) {
 		return false;
 	}
@@ -767,9 +767,9 @@ type CanvasContext = {
 }
 
 function getProgramUniforms(program: ProgramRecord): Map<string, WebGLUniformLocation> | null {
-	const getProgramParameter = getMethod(program.contextType, 'getProgramParameter');
-	const getActiveUniform = getMethod(program.contextType, 'getActiveUniform');
-	const getUniformLocation = getMethod(program.contextType, 'getUniformLocation');
+	const getProgramParameter = getOriginalMethod(program.contextType, 'getProgramParameter');
+	const getActiveUniform = getOriginalMethod(program.contextType, 'getActiveUniform');
+	const getUniformLocation = getOriginalMethod(program.contextType, 'getUniformLocation');
 	if (!getProgramParameter || !getActiveUniform || !getUniformLocation) {
 		return null;
 	}

@@ -5,7 +5,7 @@ import marketHistoryCSS from '../../css/content.css';
 import english from '../../json/i18n/english.json';
 import french from '../../json/i18n/french.json';
 import { SUFFIX } from './constants';
-import { addMethod, getMethod } from './methods';
+import { addOriginalMethod, getOriginalMethod } from './methods';
 import { readyPromise } from './ready';
 import { ContextType } from './record';
 import { Recorder } from './recorder';
@@ -204,7 +204,7 @@ export class Application {
 		const that = this;
 
 		// Capture the original method
-		addMethod('offscreencanvas', 'getContext', window.OffscreenCanvas.prototype.getContext);
+		addOriginalMethod('offscreencanvas', 'getContext', window.OffscreenCanvas.prototype.getContext);
 
 		// Note: we can't use an arrow function
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -232,7 +232,7 @@ export class Application {
 					break;
 			}
 
-			const originalOffscreenCanvasGetContext = getMethod('offscreencanvas', 'getContext') as (contextId: OffscreenRenderingContextId, options?: any) => OffscreenRenderingContext | null;
+			const originalOffscreenCanvasGetContext = getOriginalMethod('offscreencanvas', 'getContext') as (contextId: OffscreenRenderingContextId, options?: any) => OffscreenRenderingContext | null;
 			if (!originalOffscreenCanvasGetContext) {
 				return null;
 			}
@@ -246,7 +246,7 @@ export class Application {
 		const that = this;
 
 		// Capture the original method
-		addMethod('canvas2d', 'getContext', window.HTMLCanvasElement.prototype.getContext);
+		addOriginalMethod('canvas2d', 'getContext', window.HTMLCanvasElement.prototype.getContext);
 
 		// Note: we can't use an arrow function
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -274,7 +274,7 @@ export class Application {
 					break;
 			}
 
-			const originalHTMLCanvasElementGetContext = getMethod('canvas2d', 'getContext') as ((contextId: string, options?: any) => RenderingContext | null) | undefined;
+			const originalHTMLCanvasElementGetContext = getOriginalMethod('canvas2d', 'getContext') as ((contextId: string, options?: any) => RenderingContext | null) | undefined;
 			if (!originalHTMLCanvasElementGetContext) {
 				return null;
 			}
@@ -298,7 +298,7 @@ export class Application {
 		this.#webGLInitialized[contextId] = true;
 
 		const canvas = createElement('canvas') as HTMLCanvasElement;
-		const originalHTMLCanvasElementGetContext = getMethod('canvas2d', 'getContext') as ((contextId: string, options?: any) => RenderingContext | null) | undefined;
+		const originalHTMLCanvasElementGetContext = getOriginalMethod('canvas2d', 'getContext') as ((contextId: string, options?: any) => RenderingContext | null) | undefined;
 		if (!originalHTMLCanvasElementGetContext) {
 			return;
 		}
@@ -318,7 +318,7 @@ export class Application {
 			}
 
 			this.#methods.set(contextId, propertyName, propertyValue);
-			addMethod(contextId, propertyName, propertyValue);
+			addOriginalMethod(contextId, propertyName, propertyValue);
 			const that = this;
 
 			(context.prototype as any)[propertyName] = function (...args: any[]): any {
