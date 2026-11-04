@@ -1,8 +1,14 @@
+import { createElement } from 'harmony-ui';
 import { Map2 } from 'harmony-utils';
 import { EXTENSION_NAME } from './constants';
 import { Controller, IdentifyShader, RecompileShader } from './controller';
 import { getMethod } from './methods';
+import { readyPromise } from './ready';
 import { ContextType, Record } from './record';
+import renderTextureFragment from './shaders/rendertexture_fragment.glsl';
+import renderTextureVertex from './shaders/rendertexture_vertex.glsl';
+import { WebGLAnyRenderingContext } from './types';
+
 
 const GL_FRAGMENT_SHADER = 0x8B30;
 const GL_VERTEX_SHADER = 0x8B31;
@@ -13,14 +19,14 @@ export type ShaderRecord = {
 	type: GLenum;
 	source?: string;
 	contextType: ContextType;
-	context: WebGLRenderingContext | WebGL2RenderingContext;
+	context: WebGLAnyRenderingContext;
 	deleted: boolean;
 }
 
 type ProgramRecord = {
 	program: WebGLProgram;
 	contextType: ContextType;
-	context: WebGLRenderingContext | WebGL2RenderingContext;
+	context: WebGLAnyRenderingContext;
 	vertex?: WebGLShader;
 	fragment?: WebGLShader;
 	unknown?: WebGLShader;//TODO: remove this
@@ -48,7 +54,6 @@ void main() {
 	fragColor = vec4(1.0, 0.0, 0.0, 1.0);
 }
 `;
-
 export class Recorder {
 	#recording = false;
 	#currentId = 0;
@@ -64,11 +69,35 @@ export class Recorder {
 	readonly #uniformLocations = new Map<WebGLUniformLocation, WebGLUniformLocation | null>();
 	readonly #uniformValues = new Map<WebGLUniformLocation, UniformValue>();
 	readonly #lastProgramUsage = new Map<WebGLProgram, DOMHighResTimeStamp>();
+	readonly #canvases: {
+		webgl?: HTMLCanvasElement;
+		webgl2?: HTMLCanvasElement;
+		webgpu?: HTMLCanvasElement;
+	} = {};
+	readonly #contexts: {
+		webgl?: CanvasContext;
+		webgl2?: CanvasContext;
+		webgpu?: CanvasContext;
+	} = {};
+	readonly #textureBinding = new Map<WebGLTexture, GLenum>();//TODO: remove ?
+	readonly #seenTextures = new Set<WebGLTexture>();
+	readonly #boundTexturesPerContext = new Map<WebGLAnyRenderingContext, WebGLTexture>();
+	#id = 0;
+	#htmlCanvasContainer?: HTMLElement;
+
 
 	constructor() {
 		Controller.addEventListener('recompileshader', (event) => this.#recompileShader(event.detail));
 		Controller.addEventListener('identifyshader', (event) => this.#identifyShader(event.detail));
 		Controller.addEventListener('resetshader', (event) => this.#resetShader(event.detail));
+
+		readyPromise.then(() =>
+			this.#htmlCanvasContainer = createElement('div', {
+				parent: document.body,
+				style: 'position:absolute;bottom:0;left:0;width:20rem;height:20rem;z-index:1000;',
+				//child: this.#mainCanvas?.canvas,
+			})
+		);
 	}
 
 	setRecording(recording: boolean): void {
@@ -89,7 +118,7 @@ export class Recorder {
 		this.#shaders.clear();
 	}
 
-	addRecord(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, functionName: string, func: Function, args: any[]/*, start: DOMHighResTimeStamp, duration: DOMHighResTimeStamp*/): any {
+	addRecord(contextType: ContextType, context: WebGLAnyRenderingContext, functionName: string, func: Function, args: any[]/*, start: DOMHighResTimeStamp, duration: DOMHighResTimeStamp*/): any {
 		//console.debug(`Adding new ${contextType} record ${this.#currentId}`);
 
 		// We process the record whether we record or not: important things can occur, like shader compilation
@@ -116,7 +145,7 @@ export class Recorder {
 		return `Shader ${++this.#currentShaderId}`;
 	}
 
-	#processRecord(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, functionName: string, func: Function, args: any[]): any {
+	#processRecord(contextType: ContextType, context: WebGLAnyRenderingContext, functionName: string, func: Function, args: any[]): any {
 		switch (functionName) {
 			case 'createProgram':
 				{
@@ -227,42 +256,196 @@ export class Recorder {
 					func.apply(context, args);
 				}
 				break;
+			case 'bindTexture':
+				this.#textureBinding.set(args[1], args[0]);
+				this.#boundTexturesPerContext.set(context, args[1]);
+				func.apply(context, args);
+				break;
+			case 'texImage2D':
+				func.apply(context, args);
+				break;
+			case 'compressedTexImage2D':
+				this.#handleCompressedTexImage2D(contextType, context, args);
+				func.apply(context, args);
+				break;
 			default:
 				return func.apply(context, args);
 				break;
 		}
 	}
 
-	#getProgramUniforms(program: ProgramRecord): Map<string, WebGLUniformLocation> | null {
-		const getProgramParameter = getMethod(program.contextType, 'getProgramParameter');
-		const getActiveUniform = getMethod(program.contextType, 'getActiveUniform');
-		const getUniformLocation = getMethod(program.contextType, 'getUniformLocation');
-		if (!getProgramParameter || !getActiveUniform || !getUniformLocation) {
+	#handleCompressedTexImage2D(contextType: ContextType, context: WebGLAnyRenderingContext, args: any[]): void {
+		const c = this.#getContext(contextType);
+		if (!c) {
+			return;
+		}
+		const subContext = c.context;
+
+		const createProgram = getMethod(contextType, 'createProgram');
+		const createShader = getMethod(contextType, 'createShader');
+		const shaderSource = getMethod(contextType, 'shaderSource');
+		const compileShader = getMethod(contextType, 'compileShader');
+		const getShaderParameter = getMethod(contextType, 'getShaderParameter');
+		const linkProgram = getMethod(contextType, 'linkProgram');
+		const attachShader = getMethod(contextType, 'attachShader');
+		const getProgramParameter = getMethod(contextType, 'getProgramParameter');
+		const drawElements = getMethod(contextType, 'drawElements');
+		const useProgram = getMethod(contextType, 'useProgram');
+		const getUniformLocation = getMethod(contextType, 'getUniformLocation');
+		const uniform1i = getMethod(contextType, 'uniform1i');
+		const activeTexture = getMethod(contextType, 'activeTexture');
+		const bindTexture = getMethod(contextType, 'bindTexture');
+		const compressedTexImage2D = getMethod(contextType, 'compressedTexImage2D');
+		const createTexture = getMethod(contextType, 'createTexture');
+		const texParameteri = getMethod(contextType, 'texParameteri');
+		const getExtension = getMethod(contextType, 'getExtension');
+		if (!createProgram || !createShader || !shaderSource || !compileShader || !getShaderParameter
+			|| !linkProgram || !attachShader || !getProgramParameter || !drawElements || !useProgram || !getUniformLocation
+			|| !uniform1i || !activeTexture || !bindTexture || !compressedTexImage2D || !createTexture || !texParameteri || !getExtension
+		) {
+			return;
+		}
+
+		getExtension.apply(subContext, ['WEBGL_compressed_texture_s3tc']);//Graphics.getExtension('WEBGL_compressed_texture_s3tc');
+		getExtension.apply(subContext, ['WEBGL_compressed_texture_s3tc_srgb']);//Graphics.getExtension('WEBGL_compressed_texture_s3tc_srgb');
+
+		const program = createProgram.apply(subContext) as WebGLProgram;
+		const vertexShader = createShader.apply(subContext, [subContext.VERTEX_SHADER]) as WebGLShader | null;
+		const fragmentShader = createShader.apply(subContext, [subContext.FRAGMENT_SHADER]) as WebGLShader | null;
+		if (!vertexShader || !fragmentShader) {
+			return;
+		}
+
+		shaderSource.apply(subContext, [vertexShader, renderTextureVertex]);
+		shaderSource.apply(subContext, [fragmentShader, renderTextureFragment]);
+
+		compileShader.apply(subContext, [vertexShader]);
+		compileShader.apply(subContext, [fragmentShader]);
+
+
+		const compileStatusVertex = getShaderParameter.apply(subContext, [vertexShader, subContext.COMPILE_STATUS]);
+		if (!compileStatusVertex) {
+			//TODO: error message
+			return;
+		}
+		const compileStatusFragment = getShaderParameter.apply(subContext, [fragmentShader, subContext.COMPILE_STATUS]);
+		if (!compileStatusFragment) {
+			//TODO: error message
+			return;
+		}
+
+		attachShader.apply(subContext, [program, vertexShader]);
+		attachShader.apply(subContext, [program, fragmentShader]);
+
+		linkProgram.apply(subContext, [program]);
+		const linkStatus = getProgramParameter.apply(subContext, [program, subContext.LINK_STATUS]);
+		if (!linkStatus) {
+			//TODO: error message
+			return;
+		}
+
+		console.info('start of operations');
+
+		useProgram.apply(subContext, [program]);
+
+		if (!setupVertexAttributes(contextType, subContext, program,
+			{
+				index: {
+					array: new Uint16Array([0, 2, 1, 2, 3, 1]),
+					size: 1,
+					attributeName: '',
+				},
+				position: {
+					array: new Float32Array([-1.0, 1.0, 0.0, 1.0, 1.0, 0.0, -1.0, -1.0, 0.0, 1.0, -1.0, 0.0]),
+					size: 3,
+					attributeName: 'aVertexPosition',
+				},
+				uv: {
+					array: new Float32Array([0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0]),
+					size: 2,
+					attributeName: 'aTextureCoord',
+				},
+			}
+		)) {
+			console.error(`${EXTENSION_NAME} failed to setup attributes in handleCompressedTexImage2D`);
+			return;
+		}
+
+		const location = getUniformLocation.apply(subContext, [program, 'colorMap']) as WebGLUniformLocation | null;
+		if (!location) {
+			console.error(`${EXTENSION_NAME} failed to get colorMap location handleCompressedTexImage2D`);
+			return
+		}
+
+		uniform1i.apply(subContext, [location, 0]);
+		activeTexture.apply(subContext, [subContext.TEXTURE0]);
+		const texture = createTexture.apply(subContext) as WebGLTexture;
+		bindTexture.apply(subContext, [subContext.TEXTURE_2D, texture]);
+
+		compressedTexImage2D.apply(subContext, args);
+
+		texParameteri.apply(subContext, [subContext.TEXTURE_2D, subContext.TEXTURE_MAG_FILTER, subContext.LINEAR]);
+		texParameteri.apply(subContext, [subContext.TEXTURE_2D, subContext.TEXTURE_MIN_FILTER, subContext.LINEAR]);
+
+		drawElements.apply(subContext, [subContext.TRIANGLES, 6, subContext.UNSIGNED_SHORT, 0]);
+
+		const image = new Image();
+		image.src = c.canvas.toDataURL();
+
+		if (image) {
+			document.body.append(image);
+		}
+	}
+
+	#getContext(contextType: ContextType): CanvasContext | null {
+		if (this.#contexts[contextType] !== undefined) {
+			return this.#contexts[contextType];
+		}
+
+		const context = this.#getContext2(contextType);
+		this.#contexts[contextType] = context as any;
+
+		return context;
+	}
+
+	#getContext2(contextType: ContextType): CanvasContext | null {
+		const canvas = this.#getcanvas(contextType, 256, 256);
+		if (!canvas) {
 			return null;
 		}
 
-		const activeUniforms: GLint = getProgramParameter.apply(program.context, [program.program, program.context.ACTIVE_UNIFORMS]);
-		const result = new Map<string, WebGLUniformLocation>();
-		for (let i = 0; i < activeUniforms; i++) {
-			const uniformInfo = getActiveUniform.apply(program.context, [program.program, i]) as WebGLActiveInfo | null;
-			if (!uniformInfo) {
-				console.error(`${EXTENSION_NAME} getActiveUniform returned null for uniform ${i}`, program);
-				continue;
-			}
+		this.#htmlCanvasContainer?.append(canvas);
 
-			const uniformLocation = getUniformLocation.apply(program.context, [program.program, uniformInfo.name]) as WebGLUniformLocation | null;
-			if (!uniformLocation) {
-				//program.uniforms.set(attribInfo.name, uniformLocation);
-				console.error(`${EXTENSION_NAME} getUniformLocation returned null for uniform ${uniformInfo.name}`, program);
-				continue;
-			}
-
-			result.set(uniformInfo.name.replace('[0]', ''), uniformLocation);
+		const getContext = getMethod('canvas2d', 'getContext');
+		if (!getContext) {
+			return null;
 		}
-		return result;
+
+		const context = getContext.apply(canvas, [contextType]) as WebGLAnyRenderingContext | null;
+
+		if (context) {
+			return {
+				canvas,
+				context,
+			};
+		}
+		return null;
 	}
 
-	#getShader(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, webGLShader: WebGLShader): ShaderRecord {
+	#getcanvas(contextType: ContextType, width: number, height: number): HTMLCanvasElement {
+		if (this.#canvases[contextType]) {
+			return this.#canvases[contextType];
+		}
+
+		//const canvas = new OffscreenCanvas(width, height);
+		const canvas = createElement('canvas', {
+			width, height
+		}) as HTMLCanvasElement;
+		this.#canvases[contextType] = canvas;
+		return canvas;
+	}
+
+	#getShader(contextType: ContextType, context: WebGLAnyRenderingContext, webGLShader: WebGLShader): ShaderRecord {
 		let shader = this.#shaders.get(webGLShader);
 
 		// Shader should exist at this point, but just in case
@@ -297,7 +480,7 @@ export class Recorder {
 		return shader;
 	}
 
-	#getProgram(contextType: ContextType, context: WebGLRenderingContext | WebGL2RenderingContext, webGLProgram: WebGLProgram): ProgramRecord {
+	#getProgram(contextType: ContextType, context: WebGLAnyRenderingContext, webGLProgram: WebGLProgram): ProgramRecord {
 		let program = this.#programs.get(webGLProgram);
 		// Program should exist at this point, but just in case
 		if (!program) {
@@ -380,7 +563,7 @@ export class Recorder {
 			}
 
 			// Get the new uniforms
-			const newUniforms = this.#getProgramUniforms(programRecord);
+			const newUniforms = getProgramUniforms(programRecord);
 			if (!newUniforms) {
 				console.error(`${EXTENSION_NAME} failed to get program uniforms after linking `, programRecord);
 				continue;
@@ -523,4 +706,91 @@ export function getShaderType(type: GLenum): 'vertex' | 'fragment' | 'unknown' {
 		default:
 			return 'unknown';
 	}
+}
+
+function setupVertexAttributes(contextType: ContextType, context: WebGLAnyRenderingContext, program: WebGLProgram, geometryAttributes: WebGLAttributes): boolean {
+	const getProgramParameter = getMethod(contextType, 'getProgramParameter');
+	const getActiveAttrib = getMethod(contextType, 'getActiveAttrib');
+	const getAttribLocation = getMethod(contextType, 'getAttribLocation');
+	const createBuffer = getMethod(contextType, 'createBuffer');
+	const bindBuffer = getMethod(contextType, 'bindBuffer');
+	const bufferData = getMethod(contextType, 'bufferData');
+	const enableVertexAttribArray = getMethod(contextType, 'enableVertexAttribArray');
+	const vertexAttribPointer = getMethod(contextType, 'vertexAttribPointer');
+	if (!getProgramParameter || !getActiveAttrib || !getAttribLocation || !createBuffer || !bindBuffer || !bufferData || !enableVertexAttribArray || !vertexAttribPointer) {
+		return false;
+	}
+
+	const programAttributes = new Map<string, GLint>();
+
+	const activeAttributes: GLint = getProgramParameter.apply(context, [program, context.ACTIVE_ATTRIBUTES]) as GLint;
+	for (let i = 0; i < activeAttributes; i++) {
+		const attribInfo = getActiveAttrib.apply(context, [program, i]) as WebGLActiveInfo;//this.#glContext.getActiveAttrib(this.#program, i);
+		if (attribInfo) {
+			const attributeLocation = getAttribLocation.apply(context, [program, attribInfo.name])
+			programAttributes.set(attribInfo.name, attributeLocation);
+		}
+	}
+
+	for (const name in geometryAttributes) {
+		const attribute = geometryAttributes[name as 'index' | 'position' | 'uv'];
+		const attributeLocation = programAttributes.get(attribute.attributeName);
+
+		const buffer = createBuffer.apply(context) as WebGLBuffer;
+		if (name == 'index') {
+			bindBuffer.apply(context, [context.ELEMENT_ARRAY_BUFFER, buffer]);
+			bufferData.apply(context, [context.ELEMENT_ARRAY_BUFFER, attribute.array, context.STATIC_DRAW]);
+		} else if (attributeLocation !== undefined) {
+			bindBuffer.apply(context, [context.ARRAY_BUFFER, buffer]);
+			bufferData.apply(context, [context.ARRAY_BUFFER, attribute.array, context.STATIC_DRAW]);
+			enableVertexAttribArray.apply(context, [attributeLocation]);
+			vertexAttribPointer.apply(context, [attributeLocation, attribute.size, context.FLOAT, false, 0, 0]);
+		}
+	}
+	return true;
+}
+type WebGLAttribute = {
+	size: number,
+	array: Uint16Array | Float32Array,
+	attributeName: string,
+}
+
+type WebGLAttributes = {
+	index: WebGLAttribute;
+	position: WebGLAttribute;
+	uv: WebGLAttribute;
+}
+
+type CanvasContext = {
+	canvas: HTMLCanvasElement;
+	context: WebGLAnyRenderingContext;
+}
+
+function getProgramUniforms(program: ProgramRecord): Map<string, WebGLUniformLocation> | null {
+	const getProgramParameter = getMethod(program.contextType, 'getProgramParameter');
+	const getActiveUniform = getMethod(program.contextType, 'getActiveUniform');
+	const getUniformLocation = getMethod(program.contextType, 'getUniformLocation');
+	if (!getProgramParameter || !getActiveUniform || !getUniformLocation) {
+		return null;
+	}
+
+	const activeUniforms: GLint = getProgramParameter.apply(program.context, [program.program, program.context.ACTIVE_UNIFORMS]);
+	const result = new Map<string, WebGLUniformLocation>();
+	for (let i = 0; i < activeUniforms; i++) {
+		const uniformInfo = getActiveUniform.apply(program.context, [program.program, i]) as WebGLActiveInfo | null;
+		if (!uniformInfo) {
+			console.error(`${EXTENSION_NAME} getActiveUniform returned null for uniform ${i}`, program);
+			continue;
+		}
+
+		const uniformLocation = getUniformLocation.apply(program.context, [program.program, uniformInfo.name]) as WebGLUniformLocation | null;
+		if (!uniformLocation) {
+			//program.uniforms.set(attribInfo.name, uniformLocation);
+			console.error(`${EXTENSION_NAME} getUniformLocation returned null for uniform ${uniformInfo.name}`, program);
+			continue;
+		}
+
+		result.set(uniformInfo.name.replace('[0]', ''), uniformLocation);
+	}
+	return result;
 }

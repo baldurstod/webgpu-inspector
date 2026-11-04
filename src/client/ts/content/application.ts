@@ -5,12 +5,13 @@ import marketHistoryCSS from '../../css/content.css';
 import english from '../../json/i18n/english.json';
 import french from '../../json/i18n/french.json';
 import { SUFFIX } from './constants';
-import { addMethod } from './methods';
+import { addMethod, getMethod } from './methods';
 import { readyPromise } from './ready';
 import { ContextType } from './record';
 import { Recorder } from './recorder';
 import { RecorderView } from './view/recorderview';
 import { ShaderEditor } from './view/shadereditor';
+import { TextureViewer } from './view/textureviewer';
 
 export class Application {
 	#allowed: { webgl: boolean, webgl2: boolean, webgpu: boolean } = { webgl: true, webgl2: true, webgpu: true };
@@ -18,10 +19,9 @@ export class Application {
 	#htmlShaderEditor?: ShaderEditor;
 	#htmlRecorderView?: RecorderView;
 	#recorder = new Recorder();
+	#htmlTextureViewer?: TextureViewer;
 	#methods = new Map2<ContextType, string, Function>();
 	#webGLInitialized: { webgl: boolean, webgl2: boolean } = { webgl: false, webgl2: false };
-	#originalOffscreenCanvasGetContext = window.OffscreenCanvas.prototype.getContext;
-	#originalHTMLCanvasElementGetContext = window.HTMLCanvasElement.prototype.getContext;
 	#originalRequestAnimationFrame = window.requestAnimationFrame;
 	#originalCancelAnimationFrame = window.cancelAnimationFrame;
 
@@ -50,6 +50,7 @@ export class Application {
 
 		this.#htmlShaderEditor = new ShaderEditor();
 		this.#htmlRecorderView = new RecorderView(this.#recorder);
+		this.#htmlTextureViewer = new TextureViewer();
 
 		// We wait for page readiness. document.body doesn't exist before that
 		await readyPromise;
@@ -157,6 +158,10 @@ export class Application {
 								'data-i18n': '#shaders',
 								child: this.#htmlShaderEditor.htmlElement,
 							}),
+							createElement('harmony-tab' + SUFFIX, {
+								'data-i18n': '#textures',
+								child: this.#htmlTextureViewer.htmlElement,
+							}),
 						],
 					}),
 					childs: [
@@ -198,6 +203,9 @@ export class Application {
 		// eslint-disable-next-line @typescript-eslint/no-this-alias
 		const that = this;
 
+		// Capture the original method
+		addMethod('offscreencanvas', 'getContext', window.OffscreenCanvas.prototype.getContext);
+
 		// Note: we can't use an arrow function
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 		window.OffscreenCanvas.prototype.getContext = function (this: OffscreenCanvas, contextId: OffscreenRenderingContextId, options?: any): OffscreenRenderingContext | null {
@@ -223,13 +231,22 @@ export class Application {
 					void that.#initPanel();
 					break;
 			}
-			return that.#originalOffscreenCanvasGetContext.call(this, contextId, options,);
+
+			const originalOffscreenCanvasGetContext = getMethod('offscreencanvas', 'getContext') as (contextId: OffscreenRenderingContextId, options?: any) => OffscreenRenderingContext | null;
+			if (!originalOffscreenCanvasGetContext) {
+				return null;
+			}
+
+			return originalOffscreenCanvasGetContext.call(this, contextId, options,);
 		} as any;
 	}
 
 	#initHTMLCanvasElement(): void {
 		// eslint-disable-next-line @typescript-eslint/no-this-alias
 		const that = this;
+
+		// Capture the original method
+		addMethod('canvas2d', 'getContext', window.HTMLCanvasElement.prototype.getContext);
 
 		// Note: we can't use an arrow function
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -256,7 +273,13 @@ export class Application {
 					void that.#initPanel();
 					break;
 			}
-			return that.#originalHTMLCanvasElementGetContext.call(this, contextId, options,);
+
+			const originalHTMLCanvasElementGetContext = getMethod('canvas2d', 'getContext') as ((contextId: string, options?: any) => RenderingContext | null) | undefined;
+			if (!originalHTMLCanvasElementGetContext) {
+				return null;
+			}
+
+			return originalHTMLCanvasElementGetContext.call(this, contextId, options,);
 		} as any;
 	}
 
@@ -275,7 +298,12 @@ export class Application {
 		this.#webGLInitialized[contextId] = true;
 
 		const canvas = createElement('canvas') as HTMLCanvasElement;
-		const webGLAnyContext = this.#originalHTMLCanvasElementGetContext.call(canvas, contextId);
+		const originalHTMLCanvasElementGetContext = getMethod('canvas2d', 'getContext') as ((contextId: string, options?: any) => RenderingContext | null) | undefined;
+		if (!originalHTMLCanvasElementGetContext) {
+			return;
+		}
+
+		const webGLAnyContext = originalHTMLCanvasElementGetContext.call(canvas, contextId) as RenderingContext | null;
 
 		if (!webGLAnyContext) {
 			console.error(`Unable to create a ${contextId} context`);

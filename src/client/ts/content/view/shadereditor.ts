@@ -9,7 +9,7 @@ import { getRuntimeURL } from '../messages';
 import { getShaderType, ShaderRecord } from '../recorder';
 import { ViewComponent } from './component';
 
-const ACE_URL = './assets/js/ace-builds/src-min/ace.js'
+const ACE_URL = './assets/js/ace-builds/src-min/ace.js';
 
 export class ShaderEditor implements ViewComponent {
 	readonly htmlElement = createElement('div');

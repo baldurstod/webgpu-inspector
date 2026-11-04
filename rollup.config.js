@@ -5,6 +5,7 @@ import copy from 'rollup-plugin-copy';
 import del from 'rollup-plugin-delete';
 import css from 'rollup-plugin-import-css';
 import { buildTranslations } from 'translations';
+import { string as plugin_string } from 'rollup-plugin-string'
 
 const isProduction = process.env.BUILD === 'production';
 const isFirefox = process.env.BROWSER === 'firefox';
@@ -28,6 +29,9 @@ export default [
 			isProduction ? del({ targets: 'build/client/*' }) : null,
 			typescript(),
 			css(),
+			plugin_string({
+				include: ["**/*.glsl"],
+			}),
 			json({
 				compact: true,
 			}),
