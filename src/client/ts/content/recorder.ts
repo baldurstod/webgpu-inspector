@@ -262,10 +262,11 @@ export class Recorder {
 				func.apply(context, args);
 				break;
 			case 'texImage2D':
+				this.#handleTexImage2D(contextType, context, args, 'texImage2D');
 				func.apply(context, args);
 				break;
 			case 'compressedTexImage2D':
-				this.#handleCompressedTexImage2D(contextType, context, args);
+				this.#handleTexImage2D(contextType, context, args, 'compressedTexImage2D');
 				func.apply(context, args);
 				break;
 			default:
@@ -274,7 +275,7 @@ export class Recorder {
 		}
 	}
 
-	#handleCompressedTexImage2D(contextType: ContextType, context: WebGLAnyRenderingContext, args: any[]): void {
+	#handleTexImage2D(contextType: ContextType, context: WebGLAnyRenderingContext, args: any[], textureFunc: 'texImage2D' | 'compressedTexImage2D'): void {
 		const c = this.#getContext(contextType);
 		if (!c) {
 			return;
@@ -295,7 +296,7 @@ export class Recorder {
 		const uniform1i = getOriginalMethod(contextType, 'uniform1i');
 		const activeTexture = getOriginalMethod(contextType, 'activeTexture');
 		const bindTexture = getOriginalMethod(contextType, 'bindTexture');
-		const compressedTexImage2D = getOriginalMethod(contextType, 'compressedTexImage2D');
+		const compressedTexImage2D = getOriginalMethod(contextType, textureFunc);
 		const createTexture = getOriginalMethod(contextType, 'createTexture');
 		const texParameteri = getOriginalMethod(contextType, 'texParameteri');
 		const getExtension = getOriginalMethod(contextType, 'getExtension');
@@ -389,9 +390,32 @@ export class Recorder {
 		texParameteri.apply(subContext, [subContext.TEXTURE_2D, subContext.TEXTURE_MAG_FILTER, subContext.LINEAR]);
 		texParameteri.apply(subContext, [subContext.TEXTURE_2D, subContext.TEXTURE_MIN_FILTER, subContext.LINEAR]);
 
+		// Compute the image size
+		let width = args[3];
+		let height = args[4];
 
-		const width = args[3];
-		const height = args[4];
+		if (textureFunc == 'texImage2D') {
+			// For texImage2D, width and height can be inferred from the source (arg 5)
+			const source = args[5];
+			if (source) {
+				if (
+					source instanceof ImageBitmap
+					|| source instanceof ImageData
+					|| source instanceof HTMLImageElement
+					|| source instanceof HTMLCanvasElement
+					|| source instanceof HTMLVideoElement
+					|| source instanceof OffscreenCanvas
+				) {
+					//console.warn('have texImage2D(target, level, internalformat, format, type, source)');
+					width = source.width;
+					height = source.height;
+				} else if (source instanceof VideoFrame) {
+					//console.warn('have texImage2D(target, level, internalformat, format, type, source)');
+					width = source.displayWidth;
+					height = source.displayHeight;
+				}
+			}
+		}
 
 		c.canvas.width = width;
 		c.canvas.height = height;
