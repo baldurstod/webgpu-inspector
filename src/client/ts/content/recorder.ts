@@ -81,7 +81,7 @@ export class Recorder {
 	} = {};
 	readonly #textureBinding = new Map<WebGLTexture, GLenum>();//TODO: remove ?
 	readonly #seenTextures = new Set<WebGLTexture>();
-	readonly #boundTexturesPerContext = new Map<WebGLAnyRenderingContext, WebGLTexture>();
+	readonly #boundTexturesPerContext = new Map<WebGLAnyRenderingContext, WebGLTexture | null>();
 	#id = 0;
 	#htmlCanvasContainer?: HTMLElement;
 
@@ -93,7 +93,7 @@ export class Recorder {
 
 		readyPromise.then(() =>
 			this.#htmlCanvasContainer = createElement('div', {
-				parent: document.body,
+				//parent: document.body,
 				style: 'position:absolute;bottom:0;left:0;width:20rem;height:20rem;z-index:1000;',
 				//child: this.#mainCanvas?.canvas,
 			})
@@ -299,9 +299,11 @@ export class Recorder {
 		const createTexture = getOriginalMethod(contextType, 'createTexture');
 		const texParameteri = getOriginalMethod(contextType, 'texParameteri');
 		const getExtension = getOriginalMethod(contextType, 'getExtension');
+		const viewport = getOriginalMethod(contextType, 'viewport');
 		if (!createProgram || !createShader || !shaderSource || !compileShader || !getShaderParameter
 			|| !linkProgram || !attachShader || !getProgramParameter || !drawElements || !useProgram || !getUniformLocation
 			|| !uniform1i || !activeTexture || !bindTexture || !compressedTexImage2D || !createTexture || !texParameteri || !getExtension
+			|| !viewport
 		) {
 			return;
 		}
@@ -361,7 +363,7 @@ export class Recorder {
 					attributeName: 'aVertexPosition',
 				},
 				uv: {
-					array: new Float32Array([0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0]),
+					array: new Float32Array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]),
 					size: 2,
 					attributeName: 'aTextureCoord',
 				},
@@ -387,13 +389,34 @@ export class Recorder {
 		texParameteri.apply(subContext, [subContext.TEXTURE_2D, subContext.TEXTURE_MAG_FILTER, subContext.LINEAR]);
 		texParameteri.apply(subContext, [subContext.TEXTURE_2D, subContext.TEXTURE_MIN_FILTER, subContext.LINEAR]);
 
+
+		const width = args[3];
+		const height = args[4];
+
+		c.canvas.width = width;
+		c.canvas.height = height;
+
+		viewport.apply(subContext, [0, 0, width, height]);
+
 		drawElements.apply(subContext, [subContext.TRIANGLES, 6, subContext.UNSIGNED_SHORT, 0]);
 
 		const image = new Image();
 		image.src = c.canvas.toDataURL();
 
 		if (image) {
-			document.body.append(image);
+			const texture = this.#boundTexturesPerContext.get(context);
+			if (texture) {
+				Controller.dispatchEvent('textureupdated', {
+					detail: {
+						contextType,
+						context,
+						texture,
+						image,
+					}
+				});
+			} else {
+				console.error(`No texture bound for context ${contextType}`, context, texture);
+			}
 		}
 	}
 

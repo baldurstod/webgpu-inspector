@@ -22,6 +22,7 @@
 	flex: 0 0 auto;
 	padding: 0 0.5rem;
 }
+
 .identify-shader {
 	flex: 0 0 auto;
 	padding: 0 0.5rem;
@@ -29,4 +30,14 @@
 
 .identify-shader.on {
 	color: green;
+}
+
+.textures {
+	width: 100%;
+	height: 100%;
+	overflow: auto;
+}
+
+.textures>img {
+	height: 128px;
 }

@@ -5,6 +5,7 @@ import marketHistoryCSS from '../../css/content.css';
 import english from '../../json/i18n/english.json';
 import french from '../../json/i18n/french.json';
 import { SUFFIX } from './constants';
+import { Controller, TextureUpdatedDetail } from './controller';
 import { addOriginalMethod, getOriginalMethod } from './methods';
 import { readyPromise } from './ready';
 import { ContextType } from './record';
@@ -30,6 +31,7 @@ export class Application {
 		this.#initOffscreenCanvas();
 		this.#initHTMLCanvasElement();
 		void this.#initI18n();
+		Controller.addEventListener('textureupdated', event => this.#handleTextureUpdated(event.detail));
 	}
 
 	async #initI18n(): Promise<void> {
@@ -333,5 +335,13 @@ export class Application {
 				return result;
 			};
 		}
+	}
+
+	async #handleTextureUpdated(detail: TextureUpdatedDetail): Promise<void> {
+		await this.#initPanel();
+		if (!detail.image) {
+			return;
+		}
+		this.#htmlTextureViewer?.updateTexture(detail.contextType, detail.texture, detail.image);
 	}
 }

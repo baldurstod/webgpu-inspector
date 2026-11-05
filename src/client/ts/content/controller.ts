@@ -1,4 +1,6 @@
+import { ContextType } from './record';
 import { ShaderRecord } from './recorder';
+import { WebGLAnyRenderingContext } from './types';
 
 export type ControllerEvent =
 	'shaderadded'
@@ -8,6 +10,7 @@ export type ControllerEvent =
 	| 'identifyshader'
 	| 'resetshader'
 	| 'requestanimationframe'
+	| 'textureupdated'
 	;
 
 // Same as CustomEventInit with required detail
@@ -25,6 +28,7 @@ export class Controller {
 	static addEventListener(type: 'identifyshader', callback: (evt: CustomEvent<IdentifyShader>) => void, options?: AddEventListenerOptions | boolean): void;
 	static addEventListener(type: 'resetshader', callback: (evt: CustomEvent<ResetShader>) => void, options?: AddEventListenerOptions | boolean): void;
 	static addEventListener(type: 'requestanimationframe', callback: (evt: CustomEvent<DOMHighResTimeStamp>) => void, options?: AddEventListenerOptions | boolean): void;
+	static addEventListener(type: 'textureupdated', callback: (evt: CustomEvent<TextureUpdatedDetail>) => void, options?: AddEventListenerOptions | boolean): void;
 	static addEventListener(type: ControllerEvent, callback: (evt: CustomEvent) => void, options?: AddEventListenerOptions | boolean): void {
 		this.#eventTarget.addEventListener(type, callback as (evt: Event) => void, options);
 	}
@@ -36,6 +40,7 @@ export class Controller {
 	static dispatchEvent(type: 'identifyshader', options: ControllerEventInit<IdentifyShader>): boolean;
 	static dispatchEvent(type: 'resetshader', options: ControllerEventInit<ResetShader>): boolean;
 	static dispatchEvent(type: 'requestanimationframe', options: ControllerEventInit<DOMHighResTimeStamp>): boolean;
+	static dispatchEvent(type: 'textureupdated', options: ControllerEventInit<TextureUpdatedDetail>): boolean;
 	static dispatchEvent<T>(type: ControllerEvent, options?: CustomEventInit<T>): boolean {
 		return this.#eventTarget.dispatchEvent(new CustomEvent<T>(type, options));
 	}
@@ -57,3 +62,10 @@ export type IdentifyShader = {
 };
 
 export type ResetShader = IdentifyShader;
+
+export type TextureUpdatedDetail = {
+	contextType: ContextType;
+	context: WebGLAnyRenderingContext;
+	texture: WebGLTexture;
+	image: HTMLImageElement | null;
+};

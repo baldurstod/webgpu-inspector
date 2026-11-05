@@ -13,11 +13,13 @@
 	width: 15rem;
 	height: 4rem;
 	*/
+	max-width: 50%;
 }
 
 .header {
 	display: flex;
 	align-items: center;
+	flex: 0;
 }
 
 :host(.maximized) {
@@ -25,6 +27,9 @@
 	height: 100%;
 	border: 1px solid #FFF;
 	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch
 }
 
 .extension-name {
@@ -44,6 +49,10 @@
 	display: flex;
 }
 
+.toolbar {
+	flex: 0;
+}
+
 .toolbar,
 .content {
 	display: none;
@@ -52,6 +61,8 @@
 .content {
 	flex: 1;
 	background-color: blueviolet;
+	/*position: relative;*/
+	overflow: hidden;
 }
 
 :host(.maximized) .toolbar,
